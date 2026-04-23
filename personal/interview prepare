@@ -1,0 +1,53 @@
+
+
+delta lake -- (ADLS gen2):  
+1. its build on top of apache spark and cloud objects like azure,aws,gcp -- developed by databricks
+2. basically its a storage which can store all type data
+3. it support ACID property, Time travelling, schema enforcement[fail is schema missmatch]
+4. unified batch ans streaming
+5. it efficiently handles millions of files using a transaction log[_delta_log]
+
+ACID transaction
+A - Atomicity - untill the transaction completed fully data will not been moved, -- completely roll back if any error occur
+C - consistency - enforces schema constant, which present bad data from being inserted
+I - isolation - multiple user can read/write at same time
+D - Durability - once the transaction is completed data is permentally stored
+
+data objects in databricks
+
+        METASTORE --> CATALOG --> SCHEMA -->TABLES/VIEWS/FUNCTION
+
+tables --   
+        1. managed table = table created in internal storage[metastore storage --> when metastore created admin has been given a default location-- this is where managed table data will be stored]
+            CREATE TABLE database_name.table_name (
+            id INT,
+            name STRING
+            )
+            USING DELTA;
+        2. external table -- table data store in external loaction 
+            CREATE TABLE database_name.table_name (
+            id INT,
+            name STRING
+            )
+            USING DELTA
+            LOCATION '/mnt/adls/path/to/data/';
+
+views -- 
+        1. Standard View- Standard views are permanent and stored in the metastore
+            CREATE VIEW view_name AS
+            SELECT * FROM table_name;
+        2. Temporary View - temporary views are session-specific, if session closed in the notebook view will not be available
+            CREATE TEMP VIEW temp_view_name AS
+            SELECT * FROM table_name;
+        3. Global Temporary View - Accessible across multiple notebooks/sessions, Stored in global_temp database
+            CREATE GLOBAL TEMP VIEW global_view_name AS
+            SELECT * FROM table_name;
+            📌 Access it like:
+            SELECT * FROM global_temp.global_view_name;
+
+MEDALLION ARCHECTURE- 
+
+        SOURCE --> BRONZE[raw data] --> SILVER[filtered, cleaned data] --> GOLD[business level aggregation]
+                        data quality increases as it moves
+
+
