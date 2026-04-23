@@ -1,0 +1,144 @@
+📌 Project Overview: Smart Watch Health Data Platform
+
+We are working with a client who manufactures smart wristwatches. These devices continuously capture user health parameters (such as heart rate) and send the data to our platform. Our responsibility is to design a scalable data platform to ingest, process, and analyze this data efficiently.
+
+📊 Data Sources & Datasets
+
+1. Registration Dataset (Batch)
+This dataset is created when a device is assigned to a user.
+Source: Cloud storage / volume
+Key Columns:
+* user_id
+* device_id
+* mac_address
+* registration_timestamp
+
+2. User Profile Dataset (CDC - Change Data Capture)
+This dataset comes from the mobile application where users register and manage their profiles.
+Source: Kafka Topic
+Characteristics:
+Supports inserts, updates, and deletes
+Maintains history of user changes
+Key Columns:
+* user_id
+* name
+* age
+* sex
+* city
+* state
+* user_type (new, update, delete)
+
+3. BPM Stream Dataset (Streaming)
+This dataset captures continuous heart rate data from the wearable device.
+Source: Kafka Topic
+Key Columns:
+* device_id
+* timestamp
+* heart_rate
+
+4. Gym Login/Logout Dataset
+Tracks user entry and exit from partnered fitness centers.
+Source: Kafka Topic
+Key Columns:
+* mac_address
+* gym
+* login_time
+* logout_time
+
+5. Workout Session Dataset
+Tracks workout session start and end events.
+Source: Kafka Topic
+Key Columns:
+* user_id
+* workout_id
+* timestamp
+* action (start / stop)
+* session_id
+
+---------------------------------------------------------------------
+
+🏗️ Architecture: Lakehouse with Medallion Pattern
+
+We implement a Medallion Architecture to structure the data processing pipeline:
+
+🥉 Bronze Layer (Raw Data)
+Stores raw ingested data from all sources
+Maintains original schema and minimal transformation
+Supports both batch and streaming ingestion
+
+🥈 Silver Layer (Cleaned & Transformed)
+Data cleansing, validation, and deduplication
+Apply CDC logic for user profile
+Join datasets where required
+Standardize schema
+
+🥇 Gold Layer (Business-Level Aggregates)
+Contains curated datasets for analytics and reporting
+Optimized for query performance
+📈 Business Requirements (Gold Tables)
+
+1. Workout BPM Summary
+Provides heart rate statistics during workout sessions.
+Columns:
+user_id
+date
+workout_id
+session_id
+age
+sex
+city
+state
+record_count (#rec)
+min_bpm
+avg_bpm
+max_bpm
+Description:
+For each user and workout session, calculate daily minimum, average, and maximum heart rate during exercise.
+
+2. Gym Activity Summary
+Tracks user movement and activity inside fitness centers.
+Columns:
+gym
+mac_address
+date
+workout
+minutes_in_gym
+minutes_exercising
+Description:
+Provides insights into total time spent in the gym and actual workout duration.
+
+-------------------------------------------------------------------------------------
+
+⚙️ Platform Design Requirements
+
+1. Environment Setup
+Separate environments for Development, Testing, and Production
+Ensure proper access control and data security
+
+2. Decoupled Architecture
+Separate data ingestion from data processing
+Enables independent scaling and maintenance
+
+3. Batch & Streaming Support
+Batch: Registration dataset
+Streaming: Kafka-based datasets (user profile, BPM, gym, workout)
+
+4. Testing Strategy
+Automated integration testing for pipelines
+Validate schema, data quality, and transformations
+
+5. CI/CD Pipeline
+Automated deployment across environments
+Version-controlled code (Git-based)
+Supports testing and production releases
+
+---------------------------------------------------------------------------------------------
+
+💡 Summary
+
+This platform enables:
+
+Real-time health monitoring
+Scalable data processing
+Actionable fitness insights for users
+Secure and maintainable data architecture
