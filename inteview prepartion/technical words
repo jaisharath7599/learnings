@@ -1,0 +1,11 @@
+what is data skew?
+    Data skew is when your data is unevenly distributed across partitions — meaning some partitions have a lot of data, while others have very little or none.
+    🔹 Simple way to understand
+    Imagine 3 partitions:
+    Partition 0 → 1 GB data 😓
+    Partition 1 → 10 MB 🙂
+    Partition 2 → 5 MB 🙂
+    👉 One partition is overloaded → this is data skew
+
+what is Data shuffle?
+    Data shuffle in Spark is when data is moved across partitions (and often across machines) so that the right data ends up together for processing.

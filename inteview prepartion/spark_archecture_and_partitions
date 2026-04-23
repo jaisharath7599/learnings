@@ -1,0 +1,214 @@
+How spark execute code???
+
+SQL Query / DataFrame
+        │
+        ▼
+1. Parsing
+(Unresolved Logical Plan)
+        │
+        ▼
+2. Analysis (Catalog Check)
+(Resolved Logical Plan)
+        │
+        ▼
+3. Logical Optimization
+(Optimized Logical Plan)
+        │
+        ▼
+4. Physical Planning
+(Multiple Physical Plans)
+        │
+        ▼
+5. Cost-Based Selection
+(Best Physical Plan)
+        │
+        ▼
+6. Execution (Spark Jobs)
+
+
+1. Parsing (SQL → Unresolved Logical Plan)
+Spark first checks syntax correctness
+Converts your query into an internal structure called: 👉 Unresolved Logical Plan
+
+2. Analysis (Using Catalog)
+Spark uses the Catalog (metadata store - contains table names, columns, database info)
+    It validates:
+    Table exists or not
+    Columns exist or not
+
+3. Logical Optimization
+Spark applies optimization rules to improve performance
+    Common optimizations:
+    Projection Pushdown → Select only required columns
+    Filter Pushdown → Apply filters early
+    Constant folding, predicate simplification
+
+4. Physical Planning
+Spark converts logical plan into multiple physical plans
+    These are actual execution strategies like:
+    Broadcast Join
+    Sort Merge Join
+    Shuffle Hash Join
+
+5. Cost-Based Optimization (CBO)
+Spark evaluates all physical plans
+Chooses the best plan based on cost (data size, stats, etc.)
+
+6. Execution
+The selected physical plan is executed by Spark engine
+Tasks are distributed across cluster nodes
+
+If you run:
+df.explain(True)  -- in databicks notebook
+You can see all stages:
+Parsed Logical Plan
+Analyzed Logical Plan
+Optimized Logical Plan
+Physical Plan
+
+-------------------------------------------
+types of transformation - 
+1. narrow transformation = transformation doesn't inculdes multiple partitions while execution -- so no shuffle data b/w partition hence this are faster
+        eg - map(), filter(), select()
+
+2. wide transformation = transformation does inculdes multiple partitions while execution
+        eg - groupby(), joins, coalesce, repartition 
+
+---------------------------------------------
+different partitions methods in databricks - 
+1. repartition = used to increase or decrease number the partitions 
+                df.rdd.getNumPartitions() --> return number of partitions in df dataframe
+                df.repartition(24)
+
+2. coalesce = used only to decrease num of partition -- repartition also do the same but coalesce will try to avoid shuffling, 
+how it avoid shuffle -- when it try to reduce partitons it will try to reduce with in same executor
+        Imagine you have 8 partitions → want 4 partitions
+        With coalesce(4):
+        Spark will:
+        combine nearby partitions
+        assign multiple old partitions → one new partition
+        Data stays mostly on the same executor
+-- FYI, instead executor we have multiple paritions/tasks
+for more info refer image --> inteview prepartion\images\coalesce and repartition.png
+
+3. Hash partition = this is the method which decide which row need to move to which partition while join, groupBy, distrinct,repartition etc
+        When you do something like:
+        df.repartition(3, "key")
+        👉 Spark does NOT randomly distribute data
+        👉 It uses a hash function on the key column
+
+        How it works step-by-step:
+        1. Take the column value (example: A, B, C)
+        2. Apply a hash function
+        Do:
+        partition_id = hash(key) % number_of_partitions
+        3. Based on result → data goes to that partition
+
+🔥 Why this is IMPORTANT
+This is VERY critical for joins and groupBy:
+All same keys are in same partition
+So Spark can:
+do local processing
+avoid unnecessary shuffles later
+
+example--
+                Input Data
+        -------------------------
+        (A,10) (B,20) (C,30)
+        (A,30) (B,50)
+        -------------------------
+
+                  │
+                  ▼
+         Apply Hash Function
+     partition = hash(key) % 3
+                  │
+                  ▼
+
+        -------------------------
+        |       |       |       |
+        ▼       ▼       ▼       ▼
+
+   Partition 0   Partition 1   Partition 2
+   -----------   -----------   -----------
+   (A,10)        (B,20)        (C,30)
+   (A,30)        (B,50)
+
+4. Range partition(value based) = data is splted based on values 
+        eg -- 
+        1 -> 100 into p1
+        101 -> 200 into p2
+        201 -> 300 into p3
+df = df.repartitionByRange(100,"order_date")
+used for sorting, windown functions...
+
+5. round-robin partitioning(even distrubution) = spark distributes rows evenly and sequentinally
+        consider we have 3 partitions
+        row1 --> p1, row2 --> p2, row3 --> p3
+        row4 --> p1, row5 --> p2, row6 --> p3
+df = df.repartition(3)
+used for load balancing, remove skew, parallel write
+
+6. bucketing = pre-dividing data into fixed number of files (buckets) based on a column (using hash)
+
+        When you write a table with bucketing:
+        df.write.bucketBy(4, "id").saveAsTable("table1")
+
+        Spark does:
+        bucket_id = hash(id) % 4
+        👉 and stores data into 4 bucket files
+
+        🔹 Simple Example
+
+                Data:
+                (A,10), (B,20), (A,30), (C,40)
+                Bucket count = 3
+                Assume:
+                hash(A)%3 = 0
+                hash(B)%3 = 1
+                hash(C)%3 = 2
+
+                Stored as:
+                Bucket 0 → (A,10), (A,30)
+                Bucket 1 → (B,20)
+                Bucket 2 → (C,40)
+                👉 This happens at write time, not during 
+
+        🔹 How Bucketing reduces shuffle
+
+                Now imagine you have two tables bucketed on same column and same number of buckets
+
+                table1 → bucketBy(4, "id")
+                table2 → bucketBy(4, "id")
+                ❌ Without Bucketing (Normal Join)
+                table1 → random partitions
+                table2 → random partitions
+
+                👉 Spark must:
+
+                shuffle table1
+                shuffle table2
+                Shuffle → bring same keys together
+                ✅ With Bucketing
+                table1 bucket 0 → id=A
+                table2 bucket 0 → id=A
+
+                table1 bucket 1 → id=B
+                table2 bucket 1 → id=B
+
+                👉 Data is already aligned
+
+                So Spark can do:
+                Bucket 0 ↔ Bucket 0
+                Bucket 1 ↔ Bucket 1
+
+                🚀 No full shuffle required
+
+        Bucketing does not completely eliminate shuffle always, but it significantly reduces it
+
+7. file/ directory partitioning(hive-style)
+        this is a very common databricks delta tables- partitions stored as folders
+        eg: 
+                sales/year_2025/month_01
+                sales/year_2025/month_02
+                sales/year_2025/month_03
