@@ -1,0 +1,389 @@
+UNITY CATALOG- It is like a security + organization layer[catalog -- schema -- table] for all your data in Databricks.
+
+-------------------------------------------------
+
+DBFS[databricks file system] -- is a file storage layer in Databricks that lets you easily store and access files inside Databricks.
+    they are 2 types:
+        1. DBFS root(dbfs:)-manage by databricks- good for small files, notebooks exports, temp files
+        2. mount points(/mnt/) - linked to your cloud storage 
+
+mount points -
+        pros = short path and easy to use
+        cons = uses service principal or key - not very secure and not recommended
+so we need to use ABDF path
+ABDF PATH-
+        pros = use RBAC(Role-Based Access Control) + managed identity
+            secure and better of unity catalog
+            -- this is recommended
+
+-----------------------------------------------------------------
+
+types of transformation - 
+1. narrow transformation = transformation doesn't inculdes multiple partitions while execution -- so no shuffle data b/w partition hence this are faster
+        eg - map(), filter(), select()
+
+2. wide transformation = transformation does inculdes multiple partitions while execution
+        eg - groupby(), joins, coalesce, repartition 
+
+-------------------------------------------
+
+TIME TRAVEL - we can go back in time and read the table data as it was earlier
+SELECT * FROM table_name VERSION AS OF 3;
+SELECT * FROM table_name TIMESTAMP AS OF "2025-01-01";
+
+with the help of this we can even roll back table to older version
+DESC HISTORY table_name; --> to get table version num
+RESTORE table_name TO VERSION AS OF 33;
+
+----------------------------------------------
+
+TYPES OF CLONES
+1. SHALLOW CLONE - clone/copy only metadata, here data points to the same table- very fast and cheap
+2. DEEP CLONE - copy metadata + actual data -- its actually full data copy
+        query -  CREATE TABLE  new_table  SHALLOW CLONE old_table'
+
+----------------------------------------------
+                OPTIMIZATION TECHNICS
+-------------------------------------------------------------
+                    VACUUM
+VACUUM - delta keeps older files[versions] for time travel but old data biulds up -- so we can clean them using - 
+                VACUUM table_name RETAIN 24 HOURS; -- defult 7 days
+helps to remove unnecessary files -- reduce storage cost
+
+Before VACUUM:
+Data v1 → Data v2 → Data v3
+(old files still exist)
+
+After VACUUM:
+Only latest needed files remain
+you cannot time travel to versions whose data files were deleted.
+
+------------------------------------------------------------
+                    OPTIMIZE
+compacts many small files into big files -- improve read performance
+                    Z-ORDER
+sort the data based on the column to make searches faster
+query - OPTIMIZE table_name ZORDER BY col_name
+
+-----------------------------------------------------------
+how to OPTIMIZE a slow delta table - run OPTIMIZE, add VACUUM, use ZORDER and check for SKEW
+----------------------------------------------
+CATALYST OPTIMIZER- it looks at your query in databricks and automatically finds the best way to run it
+                    - it is built in datbricks - no need to specify
+---------------------------------------------
+
+BROADCAST JOIN - A broadcast join is a join optimization where Spark sends (broadcasts) a small table to all worker nodes, so the join can happen locally without shuffling the big table.
+Instead of moving large data across the network, Spark sends the small table everywhere.
+
+🔹 When to use
+✔ One table is small (few MBs)
+✔ Other table is large
+✔ Join key is common
+----------------------------------------------------------------
+
+how to fix data skew[one partition has too much data]
+1. salting - add random number to keys to distribute data evenly across partitions.
+    from pyspark.sql.functions import col, rand
+    df_large = df_large.withColumn("salt", (rand()*5).cast("int"))
+    df_large = df_large.withColumn("new_key", col("country") + "_" + col("salt"))
+
+        Before Salting (Skew)
+        --------------------
+        P0 → █████████████████
+        P1 → ██
+        P2 → █
+
+        After Salting
+        --------------------
+        P0 → ███
+        P1 → ████
+        P2 → ███
+        P3 → ████
+        P4 → ███
+
+2. broadcast join- if one table is small
+3. repartition on join column
+4. skew join hints - df.hint("skew") -- it tells the spark that This table has skewed data — please handle it intelligently
+
+-------------------------------------------------------------------
+How to Detect Data Skew in Spark UI (Real Scenario)
+Step 1: Open Spark UI
+In Databricks:
+👉 Go to:
+Cluster → Spark UI → Stages
+
+🔹 Step 2: Look at Stages
+You’ll see multiple stages like:
+Stage 1  → Completed
+Stage 2  → Running
+Stage 3  → Completed
+👉 Click the stage related to:
+join
+groupBy
+shuffle
+
+🔹 Step 3: Check Tasks Tab
+Inside the stage → go to Tasks
+👉 This is where skew becomes visible 👇
+🔥 What Skew Looks Like
+❌ Normal (No Skew)
+Task 1 → 5 sec
+Task 2 → 6 sec
+Task 3 → 5 sec
+Task 4 → 6 sec
+
+👉 All tasks take similar time ✅
+🚨 Skewed Data
+Task 1 → 5 sec
+Task 2 → 6 sec
+Task 3 → 5 sec
+Task 4 → 120 sec ❌🔥
+👉 One task is VERY slow
+
+----------------------------------------------------------------------
+                CACHE AND PERSIST
+Both are used to store intermediate data in memory (or disk) so Spark doesn’t recompute it again and again.
+
+CACHE - Stores data in RAM only 
+        df.cache()
+        If memory is not enough → recomputation happens
+
+PERSIST - we can choice where to store data
+        from pyspark import StorageLevel
+        df.persist(StorageLevel.MEMORY_AND_DISK)
+
+        🔹 Storage Levels (Important 🔥)
+        Level	                Meaning
+        MEMORY_ONLY	            Store only in RAM
+        MEMORY_AND_DISK	        RAM + spill to disk if needed
+        DISK_ONLY	            Store only on disk
+        MEMORY_ONLY_SER	        Serialized (less memory)
+
+------------------------------------------------------------
+
+AUTHENTICATION METHODS
+1. ACCESS TOKEN(ACOUNT KEY) - A secret key that gives full access to the storage account.
+        spark.conf.set(
+        "fs.azure.account.key.<storage>.dfs.core.windows.net",
+        "ACCESS_KEY"
+        )
+
+        🔹 Pros
+        ✔ Easy to use
+        ✔ Full access
+        🔹 Cons ❌
+        ❌ Very risky (full control)
+        ❌ Hard to manage securely
+        ❌ Not recommended for production
+
+2. SAS TOKEN - A temporary, limited access token to storage.[Like giving someone a temporary pass with limited permissions]
+        spark.conf.set(
+        "fs.azure.sas.<container>.<storage>.dfs.core.windows.net",
+        "SAS_TOKEN"
+        )
+        🔹 Example permissions
+        Read only
+        Write only
+        Valid for specific time
+
+        🔹 Pros
+        ✔ Secure (limited access)
+        ✔ Time-based expiry
+        ✔ Fine-grained permissions
+        🔹 Cons
+        ❌ Still needs token management
+        ❌ Can be exposed if not handled properly
+
+3. RBAC[ROLE BASE ACCESS CONTROL] - Access is controlled by assigning roles to users/services [Instead of keys, access is managed through identity (who you are).]
+        🔹 Example roles
+        Storage Blob Data Reader
+        Storage Blob Data Contributor
+
+        🔹 Pros
+        ✔ Most ecure ✅
+        ✔ No secrets to manage
+        ✔ Scalable & enterprise-ready
+        ✔ Integrated with Azure AD
+        🔹 Cons
+        ❌ Initial setup is complex
+
+| Feature      | Access Key  | SAS Token        | RBAC                  |
+| ------------ | ----------- | ---------------- | --------------------- |
+| Access Level | Full access | Limited          | Role-based            |
+| Security     | ❌ Low      | ⚠️ Medium       | ✅ High               |
+| Expiry       | ❌ No       | ✅ Yes          | ❌ No (identity-based)|
+| Use Case     | Testing     | Temporary access | Production            |
+
+------------------------------------------------------------------------------------
+
+WINDOW FUNCTIONS
+window functions performs a calculations across a set of rows related to current row, without collapsing the rows like groupBy
+
+types
+1. aggregate functions - avg(), sum(), count(), max(), min()
+2. ranking functions  - row_number(), rank(), dense_rank()
+3. analytic functions - lead(), lag(), first_value(), last_value(), nth_value()
+
+1. row_number() - row_number assigns unique sequential numbers to each row within a partition, starting from 1
+
+            Output:
+            Name   Marks   row_number
+            A      100     1
+            B      90      2
+            C      90      3
+            D      80      4
+            👉 Even duplicates get different numbers
+
+2. rank() - assign rank to rows based on order
+            if we get same rank, next rank skips the number
+            👉 Same values → same rank
+            👉 BUT skips numbers (gaps)
+
+            Output:
+            Name   Marks   rank
+            A      100     1
+            B      90      2
+            C      90      2
+            D      80      4   ❗ gap
+            👉 Rank 3 is skipped
+
+3. dense_rank() - same as rank where it doesn't skip next rank number
+
+        👉 Same values → same rank
+        👉 NO gaps
+
+        Output:
+        Name   Marks   dense_rank
+        A      100     1
+        B      90      2
+        C      90      2
+        D      80      3   ✅ no gap
+
+row_number vs rank vs dense_rank
+
+Marks:        100   90   90   80
+row_number →   1    2    3    4
+rank       →   1    2    2    4
+dense_rank →   1    2    2    3
+
+pyspark code:
+    from pyspark.sql.window import Window
+    from pyspark.sql.functions import row_number, rank, dense_rank
+    window = Window.orderBy("marks")
+    df.withColumn("row_num", row_number().over(window)) \
+    .withColumn("rank", rank().over(window)) \
+    .withColumn("dense_rank", dense_rank().over(window))
+
+🔥 When to use
+row_number() → remove duplicates / unique ordering 
+rank() → competition ranking (like sports)
+dense_rank() → continuous ranking
+
+
+4. lag() -- Gets previous row value with in the partition
+        Window.partitionBy("id").orderBy("date")
+        lag("sales", 1)
+        input:
+        id   date       sales
+        1    2024-01-01 100
+        1    2024-01-02 200
+        1    2024-01-03 300
+
+        Output:
+        date        sales   lag_sales
+        01-01       100     null
+        01-02       200     100
+        01-03       300     200
+
+5. lead() - Gets next row value
+        date        sales   lead_sales
+        01-01       100     200
+        01-02       200     300
+        01-03       300     null
+
+6. first_value() - Gets first value in partition
+        input:
+        id   date       sales
+        1    2024-01-01 100
+        1    2024-01-02 200
+        1    2024-01-03 300
+        output:
+        date        sales   first_value
+        01-01       100     100
+        01-02       200     100
+        01-03       300     100
+
+7. last_value() - get last value in partition
+        date        sales   last_value
+        01-01       100     300
+        01-02       200     300
+        01-03       300     300
+
+8. nth_value() - Gets nth row value from partition
+        nth_value("sales", 2)
+        date        sales   nth_value
+        01-01       100     200
+        01-02       200     200
+        01-03       300     200
+
+summary - 
+Row:        1     2     3
+Sales:     100   200   300
+
+lag       → null 100   200
+lead      → 200  300   null
+first     → 100  100   100
+last      → 300  300   300
+nth(2)    → 200  200   200
+
+-----------------------------------------------------------------------------------
+CDC pipeline - CDC (Change Data Capture) is a technique used to track and capture only the changes (inserts, updates, deletes) made to data instead of processing the full dataset every time.
+
+------------------------------------------------------------------------
+
+TYPES OF SCHEMA--
+1. STAR SCHEMA [most common] - 1 fact table in the center and many dimension tables surrounding it..
+            Used in data warehouses / reporting
+            Structure:
+            Dimension Tables
+            (customer, product)
+                │
+                ▼
+            Fact Table
+            (sales, orders)
+
+            Example:
+            Fact Table → sales (amount, quantity, date_id, product_id)
+            Dimension → customer (name, city)
+            Dimension → product (name, category)
+    ✅ Why it's used in production
+    Simple design
+    Fast queries
+    Easy for BI tools
+
+2. SNOWFLAKE SCHEMA - Extension of Star Schema (more normalized)
+        Structure:
+        Fact → Dimension → Sub-dimension
+        Example:
+        Product → Category → Department
+
+        ✅ Pros
+        Less data redundancy
+        More organized
+        ❌ Cons
+        More joins → slower queries
+        🔹 Use case:
+        When data is complex & large
+
+3. Medallion Architecture - Bronze → Silver → Gold
+
+4. Normalized Schema (OLTP Systems)- Used in transactional databases
+        Features:
+        Data split into multiple tables
+        Avoids duplication
+        Example:
+        Customer Table
+        Order Table
+        Product Table
+
+5. GALAXY/ FACT constallation schema - multiple fact table with shared[one] dimension table

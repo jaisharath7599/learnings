@@ -51,3 +51,38 @@ MEDALLION ARCHECTURE-
                         data quality increases as it moves
 
 
+-----------------------------------------------------
+
+Rational database --  which stores structured data or tables 
+non-rational database -- which store structured and semi structured data - eg: managoDB, apache cassandra
+
+------------------------------------------------------
+
+data lake [vs] delta lake [vs] lakehouse [vs] data warehouse
+
+data lake - store raw data, support structure, semi structure and un structure data
+            eg = ADLS gen2 and amazon s3
+
+delta lake - data lake + reliability like ACID properties, schema enforcement, time travel etc
+            eg = delta lake
+
+data warehouse - design for structure data, Optimized for BI & reporting
+            Limitation - Expensive and Not good for raw/unstructured data
+            eg = Examples: Azure Synapse Analytics ans Snowflake
+
+lakehouse - the system combines best of data lake + delta lake + data warehouse
+            eg = Databricks Lakehouse Platform
+
+| Feature       | Data Lake   | Delta Lake         | Data Warehouse     | Lakehouse         |
+| ------------- | ----------- | ------------------ | ------------------ | ----------------- |
+| Data Type     | All types   | All types          | Structured         | All types         |
+| Storage       | Cheap       | Cheap              | Expensive          | Cheap             |
+| ACID          | ❌ No       | ✅ Yes            | ✅ Yes             | ✅ Yes           |
+| Schema        | ❌ Flexible | ✅ Enforced       | ✅ Strict          | ✅ Enforced      |
+| Performance   | ❌ Slower   | ⚡ Better         | ⚡⚡ Very fast    | ⚡⚡ Fast        |
+| Use Case      | Raw storage | Reliable data lake | BI / Reporting     | Unified analytics |
+| Example Tools | ADLS, S3    | Delta Lake         | Synapse, Snowflake | Databricks        |
+
+
+-----------------------------------------------------------------------------------
+

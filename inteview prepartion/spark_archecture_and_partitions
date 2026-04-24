@@ -66,14 +66,6 @@ Analyzed Logical Plan
 Optimized Logical Plan
 Physical Plan
 
--------------------------------------------
-types of transformation - 
-1. narrow transformation = transformation doesn't inculdes multiple partitions while execution -- so no shuffle data b/w partition hence this are faster
-        eg - map(), filter(), select()
-
-2. wide transformation = transformation does inculdes multiple partitions while execution
-        eg - groupby(), joins, coalesce, repartition 
-
 ---------------------------------------------
 different partitions methods in databricks - 
 1. repartition = used to increase or decrease number the partitions 
