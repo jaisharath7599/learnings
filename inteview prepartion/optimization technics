@@ -1,0 +1,119 @@
+----------------------------------------------
+                OPTIMIZATION TECHNICS
+-------------------------------------------------------------
+                    VACUUM
+VACUUM - delta keeps older files[versions] for time travel but old data biulds up -- so we can clean them using - 
+                VACUUM table_name RETAIN 24 HOURS; -- defult 7 days
+helps to remove unnecessary files -- reduce storage cost
+
+Before VACUUM:
+Data v1 → Data v2 → Data v3
+(old files still exist)
+
+After VACUUM:
+Only latest needed files remain
+you cannot time travel to versions whose data files were deleted.
+
+------------------------------------------------------------
+                    OPTIMIZE
+compacts many small files into big files -- improve read performance
+                    Z-ORDER
+sort the data based on the column to make searches faster
+query - OPTIMIZE table_name ZORDER BY col_name
+
+-----------------------------------------------------------
+how to OPTIMIZE a slow delta table - run OPTIMIZE, add VACUUM, use ZORDER and check for SKEW
+----------------------------------------------
+CATALYST OPTIMIZER- it looks at your query in databricks and automatically finds the best way to run it
+                    - it is built in datbricks - no need to specify
+---------------------------------------------
+
+BROADCAST JOIN - A broadcast join is a join optimization where Spark sends (broadcasts) a small table to all worker nodes, so the join can happen locally without shuffling the big table.
+Instead of moving large data across the network, Spark sends the small table everywhere.
+
+🔹 When to use
+✔ One table is small (few MBs)
+✔ Other table is large
+✔ Join key is common
+----------------------------------------------------------------
+
+how to fix data skew[one partition has too much data]
+1. salting - add random number to keys to distribute data evenly across partitions.
+    from pyspark.sql.functions import col, rand
+    df_large = df_large.withColumn("salt", (rand()*5).cast("int"))
+    df_large = df_large.withColumn("new_key", col("country") + "_" + col("salt"))
+
+        Before Salting (Skew)
+        --------------------
+        P0 → █████████████████
+        P1 → ██
+        P2 → █
+
+        After Salting
+        --------------------
+        P0 → ███
+        P1 → ████
+        P2 → ███
+        P3 → ████
+        P4 → ███
+
+2. broadcast join- if one table is small
+3. repartition on join column
+4. skew join hints - df.hint("skew") -- it tells the spark that This table has skewed data — please handle it intelligently
+
+-------------------------------------------------------------------
+How to Detect Data Skew in Spark UI (Real Scenario)
+Step 1: Open Spark UI
+In Databricks:
+👉 Go to:
+Cluster → Spark UI → Stages
+
+🔹 Step 2: Look at Stages
+You’ll see multiple stages like:
+Stage 1  → Completed
+Stage 2  → Running
+Stage 3  → Completed
+👉 Click the stage related to:
+join
+groupBy
+shuffle
+
+🔹 Step 3: Check Tasks Tab
+Inside the stage → go to Tasks
+👉 This is where skew becomes visible 👇
+🔥 What Skew Looks Like
+❌ Normal (No Skew)
+Task 1 → 5 sec
+Task 2 → 6 sec
+Task 3 → 5 sec
+Task 4 → 6 sec
+
+👉 All tasks take similar time ✅
+🚨 Skewed Data
+Task 1 → 5 sec
+Task 2 → 6 sec
+Task 3 → 5 sec
+Task 4 → 120 sec ❌🔥
+👉 One task is VERY slow
+
+----------------------------------------------------------------------
+                CACHE AND PERSIST
+Both are used to store intermediate data in memory (or disk) so Spark doesn’t recompute it again and again.
+
+CACHE - Stores data in RAM only 
+        df.cache()
+        If memory is not enough → recomputation happens
+
+PERSIST - we can choice where to store data
+        from pyspark import StorageLevel
+        df.persist(StorageLevel.MEMORY_AND_DISK)
+
+        🔹 Storage Levels (Important 🔥)
+        Level	                Meaning
+        MEMORY_ONLY	            Store only in RAM
+        MEMORY_AND_DISK	        RAM + spill to disk if needed
+        DISK_ONLY	            Store only on disk
+        MEMORY_ONLY_SER	        Serialized (less memory)
+
+--------------------------------------------------------------------------------------
+
