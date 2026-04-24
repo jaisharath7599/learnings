@@ -9,3 +9,5 @@ what is data skew?
 
 what is Data shuffle?
     Data shuffle in Spark is when data is moved across partitions (and often across machines) so that the right data ends up together for processing.
+
+Partitioning → splits data into folders

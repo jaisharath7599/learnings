@@ -1,0 +1,140 @@
+CLUSTER TYPES
+1. INTERACTIVE CLUSTER [ALL PROPOSE CLUSTER]- 
+        - can be used by multiple user
+        - used in adhoc analysis, data explonation or development
+        - don't use in production as its not cost efficient
+
+2. JOB CLUSTER
+        - approximently 50% cheaper
+        - terminate afer job completed
+        - in databricks workflows [jobs] we use this
+
+3. SERVERLESS 
+        - No cluster management by you
+        - You don’t create, start, resize, or terminate clusters.
+        - Databricks automatically provides compute when you run a query or job. [databricks manage everything]
+        
+        🔹 How it works
+        You run a query / notebook / job
+        Databricks automatically allocates compute
+        Query runs using optimized engine (Photon)
+        Compute shuts down automatically after use
+        👉 No idle cost, no manual effort
+
+        ✔ Best for:
+        SQL analytics (BI tools like Power BI, Tableau)
+        Ad-hoc queries
+        Dashboards
+        Lightweight ETL jobs
+
+        ❌ Not ideal for:
+        Heavy custom Spark tuning
+        Long-running complex jobs needing full control
+        Low-level cluster configuration needs
+
+-----------------------------------------------
+
+DRIVER NODE AND WORKER NODE
+    👉 Think of a cluster like a team:
+    Driver node = Manager 🧠
+    Worker nodes = Workers 💪
+
+when we run query - 
+        driver will 
+            1. Understands the query
+            2. Breaks it into tasks/partitions
+            3. Sends tasks to workers
+            -- Only one driver per cluster
+        worker will
+            1. Process data
+            2. Execute tasks sent by driver
+            3. Read/write data from storage (ADLS/S3)
+            4. Perform transformations
+            
+    🔹 Inside each worker:
+        Has multiple cores
+        Runs multiple tasks in parallel
+    
+    🔹 Example:
+        Driver says:
+        👉 “Process partition 1, 2, 3…”
+        Workers:
+        👉 Each worker processes different partitions simultaneously
+
+---------------------------------------------------------------
+
+spark version we used in project - 16.4.x-scala2.12
+node type - standard_D4ads_v5 -- small
+            standard_D8ads_v5 -- medium
+            standard_D16ads_v5-- large
+
+----
+
+continuous jobs -
+        - refers to jobs that run streaming workloads continuosly rather than batch mode
+        - runs non stop, processing data as it arrive
+        - used when we are working with streaming data
+    eg
+        -ingesting streaming data from kafka
+
+conditional execution - 
+        - helps to build dependency chain b/w tasks based on condition
+        available conditions are
+            - all succeeded - alteast one successed - none failed - all done - alteast one failed - all failed
+        
+Job parameters - 
+        parameters that we pass for each task
+        for notebook - key value pair 
+        for python script - array of string
+
+Job contexts - 
+        special set of parameters that provides metadata information of the jobs/tasks - like task_id etc
+
+Task values - 
+        - used to pass parameters b/w tasks
+        - we can set parameter value on one task and which can be used in subsequently referenced tasks=  as be did in flexflow
+
+Late jobs - 
+        - usually no one will keep on monitor the jobs runs, if it runs more then usual time then we use soft timeout after which they receive a warning that a job or task run is taking longer then expected time
+
+run as service principle- 
+        by default, job run as the identity of the job owner, we need to change into service prinicple - 
+        then job get the permissions set to service principle instead of owner
+
+job schedule options - 
+        1. scheduled - add a time when job need to be triggered
+        2. continous - when the job sucessful or failed, job will triggered again in 1min 
+        3. file arrival - we need to specify the location, if any file arrived into that location job get triggered
+
+to set job parameters - 
+for python scripts - 
+        ["{{job.parameters.param_dict}}","{{job.run_id}}"]
+for notebook - 
+        key             value
+        task_name       {{task.name}}
+        run_id          {{task.run_id}}
+
+to pull job param values
+in python scripts 
+        import sys, json
+        param_dict = json.loads(sys.argv[1])
+in notebook
+        task_name = dbutils.widgets.get("task_name")
+
+to define parameters from one task to other
+set - dbutils.jobs.taskValues.set(key="data_dict",value= dict)
+pull - data_dict = dbutils.jobs.taskvalues.get(taskey="pre_processing",key="data_dict")
+
+to pull this in job task condition
+{{tasks.pre_processing.values.data_dict}}
+
+-----------------------------------
+JOB BEST PRACTICES
+1. cluster -  always use job cluster/serverless
+2. databricks runtime - use the latest LTS runtime
+3. cluster reuse - for all the tasks use same cluster
+4. enable photon -  for high performance
+5. repair and re-run - if job failes instead of running againg from the start use repair which runs from the failed tasks
+6. late jobs - enable notification for long running jobs
+7. run as service principle - to get all the right previlage
+

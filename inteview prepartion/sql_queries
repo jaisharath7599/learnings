@@ -1,0 +1,145 @@
+--CREATE TABLE
+--CTAS - 
+CREATE TABLE NEW_TABLE AS SELECT * FROM EXISTING_TABLE;
+--CRAS -
+CREATE OR REPLACE TABLE NEW_TABLE AS SELECT * FROM EXISTING_TABLE;
+--create external table
+CREATE EXTERNAL TABLE table_name LOCATION 's3://bucket_name/path/' AS SELECT * FROM existing_table;
+
+----------------------------------------------------------------------
+
+--DESCRIBE TABLE
+DESCRIBE TABLE_NAME;
+DESCRIBE EXTENDED TABLE_NAME;
+DESCRIBE CATALOG catalog_name;
+DESCRIBE SCHEMA SCHEMA_name;
+
+------------------------------------------------------------------------
+
+--COPY INTO
+--COPY INTO is a SQL command in Databricks used to incrementally load data from external storage into a Delta table (like ADLS, S3, etc.).
+--frist we need to create a empty delta table
+CREATE TABLE delta_table
+--run copty into command
+COPY INTO delta_table
+FROM 's3://bucket_name/path/'
+FILEFORMAT = 'parquet'
+copy_options ('mergeSchema' = 'true');
+-- mergeSchema = true option allows the COPY INTO command to automatically merge the schema of the incoming data with the existing schema of the Delta table. 
+-- if we rerun the COPY INTO command again it will not copy the data again because its already copied.
+
+------------------------------------------------------------------------
+
+--INSERT OVERWRITE
+--INSERT OVERWRITE is a SQL command used to replace the existing data in a table with new data. 
+-- it will work same as CRAS command but the difference is CRAS can alter source table schema but INSERT OVERWRITE will not alter the source table schema.
+INSERT OVERWRITE TABLE target_table
+SELECT * FROM source_table;
+
+------------------------------------------------------------------------
+
+--MERGE INTO
+--MERGE INTO is a SQL command used to perform an upsert operation, which means it can insert new records, update existing records, or delete records based on a specified condition.
+MERGE INTO target_table AS target
+USING source_table AS source
+ON target.id = source.id
+WHEN MATCHED THEN 
+    UPDATE SET target.name = source.name, target.age = source.age
+WHEN NOT MATCHED THEN 
+    INSERT (id, name, age) VALUES (source.id, source.name, source.age)
+WHEN NOT MATCHED BY SOURCE THEN 
+    DELETE;
+
+------------------------------------------------------------------------
+
+--GENERATED COLUMNS
+-- this are a special type of column whole values are automatically generated based on an expression or a sequence.
+CREATE TABLE employees (
+    id INT,
+    name STRING,
+    salary DOUBLE,
+    tax DOUBLE GENERATED ALWAYS AS (salary * 0.2) STORED
+);
+-- In this example, the tax column is a generated column that calculates the tax based on the salary column. 
+
+-- this won't work when we do merge by default, so to generate it:
+-- run --> SET spark.databricks.delta.schema.autoMerge.enabled = true;
+
+-------------------------------------------------------------------------
+
+--CONSTRAINTS
+--currently databricks suppoert only NOT NULL and CHECK constraints.
+--NOT NULL constraint ensures that a column cannot have a NULL value.
+--CHECK constraint allows you to specify a condition that must be true for each row in the table.
+
+CREATE TABLE employees (
+    id INT NOT NULL,
+    name STRING NOT NULL,
+    age INT CHECK (age >= 18)
+);
+-- In this example, the id and name columns cannot have NULL values, and the age column must be greater than or equal to 18.
+
+-------------------------------------------------------------------------
+
+-- ARRAY MANIPULATION
+🔹 input
+id	name	department	skills
+1	Arun	IT	["Python","SQL"]
+2	Ravi	IT	["SQL","Spark"]
+3	Meena	HR	["Excel","Recruit"]
+
+-- 1. EXPLODE: The EXPLODE function is used to transform an array into a set of rows. Each element of the array becomes a separate row in the output.
+SELECT id, name, EXPLODE(skills) AS skill
+FROM employees;
+
+🔹 Output
+id	name	skill
+1	Arun	Python
+1	Arun	SQL
+2	Ravi	SQL
+2	Ravi	Spark
+3	Meena	Excel
+3	Meena	Recruit
+
+-- 2. COLLECT_SET: The COLLECT_SET function is used to aggregate values into an array while eliminating duplicates. It collects unique values from a group of rows and returns them as an array.
+SELECT department, COLLECT_SET(name) AS unique_names
+FROM employees
+GROUP BY department;
+🔹 Output
+department	unique_names
+IT	["Arun","Ravi"]
+HR	["Meena"]
+
+-- 3. FLATTEN: The FLATTEN function is used to transform a nested array into a set of rows. It is similar to EXPLODE but can handle nested arrays.
+SELECT id, name, FLATTEN(skills) AS skill
+FROM employees;
+🔹 input
+id	name	skills
+1	Arun	[["Python","SQL"],["Spark"]]
+2	Ravi	[["Java"],["SQL","Scala"]]
+🔹 Output
+id	name	skill
+1	Arun	["Python","SQL","Spark"]
+2	Ravi	["Java","SQL","Scala"]
+
+-------------------------------------------------------------------------
+--PIVOT AND UNPIVOT
+--PIVOT: The PIVOT function is used to rotate rows into columns. It allows you to aggregate data and display it in a more readable format.
+SELECT *
+FROM (
+    SELECT department, name, salary
+    FROM employees
+) AS source
+PIVOT (
+    SUM(salary)
+    FOR name IN ('Arun', 'Ravi', 'Meena')
+) AS pivot_table;
+
+---------------------------------
+--UDF - USER DEFINED FUNCTION
+--UDFs are custom functions that you can create to perform specific operations on your data.
+-- example of creating a UDF to calculate the square of a number:
+CREATE OR REPLACE FUNCTION square(x INT) RETURNS INT
+
+--databricks perfered to use sql UDF instead of python
+

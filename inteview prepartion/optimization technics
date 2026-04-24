@@ -117,3 +117,71 @@ PERSIST - we can choice where to store data
 
 --------------------------------------------------------------------------------------
 
+LIGUID CLUSTERING- Liquid Clustering is a modern optimization feature in Databricks that automatically organizes data for faster queries without strict partitions or manual tuning.
+- automatically and continuously optimization - data is reorganized incrementally in background 
+- no need to run manuall optimize and zorder
+
+                CREATE TABLE sales (
+                id INT,
+                date DATE,
+                region STRING,
+                amount DOUBLE
+                )
+                USING DELTA
+                CLUSTER BY (region, date);
+
+🔹 Key Features
+1. Dynamic clustering
+        Adjusts automatically based on data & queries
+2. No rigid partitions
+        Avoids problems like:
+           too many small files
+           skewed partitions
+3. Background optimization
+        Runs automatically
+
+🔹 When to use
+✔ Large tables
+✔ Frequent filtering on columns
+✔ Changing query patterns
+✔ Avoid manual optimization
+✔ table which grow quickly and require maintance and tuning effort
+
+Partitioning → splits data into folders
+Z-ORDER      → reorders data inside files (manual)
+Liquid       → continuously organizes data automatically
+
+-------------------------------------------------------------------------------------
+
+DELETION VECTORS - Deletion Vectors (DV) are a feature in Delta Lake (used in Databricks) that allow Spark to logically delete rows without rewriting the data files.
+
+how it works - 
+        consider we have a file with 100 records now if we delete 20rows from it, then it will create new parquet file with 80records by keeping old parquet file with 100 records [because parquet files are immutable- can't change]
+        in delection vectors, instead of creating new file again, it will create a delection vector log which will be in binary format, which store the information[index] about the deleted records. when we query it will go the logs and check the index and then remove the reocrds
+
+        ❌ Without Deletion Vectors
+        When you delete/update data:
+        File A (100 rows)
+        → delete 2 rows
+        Spark must:
+        rewrite entire file ❌
+        create new file
+        👉 Expensive + slow
+
+        ✅ With Deletion Vectors
+        File A (100 rows)
+        → mark rows 5 and 20 as deleted
+        → store this info separately
+        👉 No file rewrite needed 🚀 
+
+-----------------------------------------------------------------------------------
+
+PREDICTIVE I/O -  Predictive I/O (in Databricks / Lakehouse context) is a performance optimization feature that helps the system intelligently predict which data files are needed and reduces unnecessary data scanning and I/O operations.
+- it perdicts whar data files will be needed next, based on query plans and part patterns
+- it start reading those file into memory before spark actually needs them
+
+result - fast query, especially for large data scans
+
+in databricks, while creating a cluster we have a option to enable the PHOTON -- by enabling this predictive I/O will work automatically..
+
+---------------------------------------------------------------------------------------

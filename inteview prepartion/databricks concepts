@@ -41,7 +41,7 @@ TYPES OF CLONES
 1. SHALLOW CLONE - clone/copy only metadata, here data points to the same table- very fast and cheap
 2. DEEP CLONE - copy metadata + actual data -- its actually full data copy
         query -  CREATE TABLE  new_table  SHALLOW CLONE old_table'
-        
+
 ------------------------------------------------------------
 
 AUTHENTICATION METHODS
@@ -270,3 +270,114 @@ TYPES OF SCHEMA--
         Product Table
 
 5. GALAXY/ FACT constallation schema - multiple fact table with shared[one] dimension table
+
+------------------------------------------
+            JOINS
+
+🔹 Sample Tables
+👨‍💼 Employees table
+emp_id	name	dept_id
+1	Arun	10
+2	Ravi	20
+3	Meena	30
+4	John	40
+
+🏢 Departments table
+dept_id	dept_name
+10	IT
+20	HR
+30	Finance
+50	Admin
+
+
+1. inner join - only matching rows from the both table
+
+    SELECT e.emp_id, e.name, d.dept_name
+    FROM employees e
+    INNER JOIN departments d
+    ON e.dept_id = d.dept_id;
+
+    Output
+    emp_id	name	dept_name
+    1	Arun	IT
+    2	Ravi	HR
+    3	Meena	Finance
+    👉 John is removed (no matching dept)
+    When to use:
+    ✔ When you only want valid relationships
+    ✔ No NULL/unknown data needed
+
+2. left join - returns all the rows from the left table with matching rows from the right table. rows without a match are filled with nulls. this is also called as left outer join
+
+    SELECT e.emp_id, e.name, d.dept_name
+    FROM employees e
+    LEFT JOIN departments d
+    ON e.dept_id = d.dept_id;
+
+    Output
+    emp_id	name	dept_name
+    1	Arun	IT
+    2	Ravi	HR
+    3	Meena	Finance
+    4	John	NULL
+    👉 John has no department → still included
+    When to use:
+    ✔ When LEFT table is your main data
+    ✔ When you want to find missing matches
+
+3. right join -- opposite to left join
+
+    SELECT e.emp_id, e.name, d.dept_name
+    FROM employees e
+    LEFT JOIN departments d
+    ON e.dept_id = d.dept_id;
+
+    Output
+    emp_id	name	dept_name
+    1	Arun	IT
+    2	Ravi	HR
+    3	Meena	Finance
+    4	John	NULL
+    👉 Admin department has no employees
+
+4. full outer join -- it returns all the rows from left and right tables. it fill null for not matching rows
+
+    SELECT e.emp_id, e.name, d.dept_name
+    FROM employees e
+    FULL OUTER JOIN departments d
+    ON e.dept_id = d.dept_id;
+
+    Output
+    emp_id	name	dept_name
+    1	Arun	IT
+    2	Ravi	HR
+    3	Meena	Finance
+    4	John	NULL
+    NULL	NULL	Admin
+
+5. cross join - returns all the possible combinations of rows from the left and right tables
+    🔹 Simple Idea
+    Think of it like:
+    👕 T-shirts × 👖 Pants
+    👉 Every T-shirt is paired with every Pant
+
+    CROSS JOIN Query
+    SELECT color, size
+    FROM colors
+    CROSS JOIN sizes;
+
+    🔹 Output
+    color	size
+    Red 	S
+    Red	    M
+    Red	    L
+    Blue	S
+    Blue	M
+    Blue	L
+
+    🔥 What happened?
+    2 colors × 3 sizes = 6 rows
+    Every combination is created
+
+-----------------------------------------------------------------------------
+
