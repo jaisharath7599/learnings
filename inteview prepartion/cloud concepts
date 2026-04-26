@@ -86,3 +86,78 @@ lakehouse - the system combines best of data lake + delta lake + data warehouse
 
 -----------------------------------------------------------------------------------
 
+FILE TYPES - 
+1.  CSV (Comma Separated Values) - A plain text file where data is stored row by row, separated by commas.
+    🔹 How data is stored
+    id,name,dept
+    1,Arun,IT
+    2,Ravi,HR
+
+    👉 Stored as:
+    Row-wise
+    No schema (just text)
+    No data types (everything is string internally)
+
+    🔹 Pros
+    ✔ Simple
+    ✔ Easy to read
+    ✔ Supported everywhere
+
+    🔹 Cons
+    ❌ No compression (large size)
+    ❌ Slow for big data
+    ❌ No schema enforcement
+    ❌ No support for nested data
+
+2. JSON (JavaScript Object Notation) - A semi-structured format used for nested and hierarchical data
+
+    🔹 How data is stored
+    {
+    "id": 1,
+    "name": "Arun",
+    "skills": ["Python", "SQL"]
+    }
+
+    👉 Stored as:
+    Key-value pairs
+    Supports nested structures (arrays, objects)
+
+    🔹 Pros
+    ✔ Handles nested data
+    ✔ Flexible schema
+    ✔ Widely used in APIs
+
+    🔹 Cons
+    ❌ Large file size
+    ❌ Slow processing
+    ❌ Not optimized for analytics
+
+3. PARQUET - A columnar storage format optimized for big data processing
+    
+    🔹 How data is stored
+    Column 1 (id):   1, 2
+    Column 2 (name): Arun, Ravi
+    Column 3 (dept): IT, HR
+
+    🔹 Pros
+    ✔ Very fast (column pruning)
+    ✔ High compression (less storage)
+    ✔ Schema stored with data
+    ✔ Best for analytics (Spark, Databricks)
+
+    🔹 Cons
+    ❌ Not human-readable
+    ❌ Slightly complex
+
+🔹 Why Parquet is best
+✔ Reads only required columns -- because its is columnar storage
+✔ Less I/O [Less data read from storage (ADLS/S3)]→ faster queries
+✔ Better compression → lower cost
+✔ Works perfectly with Spark
+
+Real Data Engineering Example
+👉 Table has 50 columns
+👉 Query uses only 3 columns
+Row format → reads all 50 ❌
+Columnar → reads only 3 ✅
+👉 That’s why Parquet is used in Databricks (Bronze → Silver → Gold)

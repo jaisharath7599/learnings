@@ -1,0 +1,369 @@
+1. Narrow vs wide transformation:
+    👉Narrow - transformation doesn't inculdes multiple partitions while execution
+    👉wide - transformation does inculdes multiple partitions while execution
+
+2. groupByKey vs reduceByKey
+    👉groupByKey - group all the values of key and then return -- (key, list of values)
+    Eg:
+    data = [("A",1), ("A",2), ("B",3), ("B",4)]   
+    rdd.groupByKey()
+    output:
+    ("A", [1,2])
+    ("B", [3,4])
+
+    👉reduceByKey- comdine all the values(like sum) return aggregated value for each key
+    Eg:
+    data = [("A",1), ("A",2), ("B",3), ("B",4)]   
+    rdd.reduceByKey(lambda x,y: x+y)
+    output:
+    ("A", 3)
+    ("B", 7)
+
+    🔹 Internal Behavior (Important)
+    groupByKey        
+    Shuffle all data first → then group
+    reduceByKey
+    Combine locally → then shuffle → then final combine
+    
+    🔹 One-line interview answer
+    reduceByKey is preferred over groupByKey because it performs local aggregation before shuffle, reducing data transfer and improving performance.
+
+3. map vs flatMap:
+Both are transformations, but the difference is in what they return per input element
+    👉map - Takes one input → gives exactly one output
+    eg:
+    data = ["hello world", "spark"]
+    rdd.map(lambda x: x.split(" "))
+    🔹 Output
+    [["hello","world"], ["spark"]]
+
+    👉flatMap - Takes one input → can give multiple outputs Also flattens the result
+    eg:
+    data = ["hello world", "spark"]
+    rdd.flatMap(lambda x: x.split(" "))
+    🔹 Output
+    ["hello","world","spark"]
+
+4. repartition vs coalesce - 
+    👉 repartition
+    Used to increase or decrease the number of partitions
+    Performs a full shuffle of data across the cluster
+    Ensures even data distribution
+
+    ✔ Use when:
+    You need better parallelism
+    Data is skewed
+    Increasing partitions
+
+    👉 coalesce
+    Used to reduce the number of partitions
+    Minimizes shuffle (tries to avoid it)
+    Merges partitions within existing executors
+
+    ✔ Use when:
+    Reducing partitions
+    Writing output (e.g., fewer files)
+    Data is already well distributed
+
+5. cache vs persist
+    👉 cache
+    Stores DataFrame in memory (RAM) by default
+    Shortcut for: persist(MEMORY_ONLY)
+    Used when data is reused multiple times
+    ✔ Fast but limited by memory
+
+    👉 persist
+    Allows choosing storage level:
+    MEMORY_ONLY
+    MEMORY_AND_DISK
+    DISK_ONLY
+
+    ✔ Used when:
+    Data is too large for memory
+    Need flexibility in storage
+
+6. orderBy vs sortBy:
+    👉 orderBy: Sorts a DataFrame by one or more columns and Works on structured data
+    df.orderBy(df["salary"].desc())
+    ✔ Features
+    Can sort by multiple columns
+    Uses Spark SQL optimization
+    Same as sort()
+
+    👉 sortBy: Sorts an RDD based on a function and Works on unstructured data
+    rdd.sortBy(lambda x: x[1])
+    ✔ Features
+    Custom sorting logic
+    Works with key-value or complex objects
+
+    | Feature      | orderBy                | sortBy               |
+    | ------------ | --------------------   | -------------------- |
+    | API          | DataFrame              | RDD                  |
+    | Input        | Columns                | Function (lambda)    |
+    | Optimization | Catalyst optimized ✅  | Less optimized ❌   |
+    | Usage        | Most common            | Rare (RDD use cases) |
+
+7. RDD vs DataFrame vs Dataset
+These are the three ways to work with data in Apache Spark
+Think of evolution like this:
+RDD → DataFrame → Dataset (more optimized & structured)
+
+    👉 RDD (Resilient Distributed Dataset) - Low-level distributed collection of objects and Works with unstructured data
+    ✔ Features
+    Full control
+    Functional programming (map, flatMap)
+    No schema
+    ❌ Drawbacks
+    No optimization
+    Slower performance
+    Hard to use
+    how it look
+        rdd = spark.sparkContext.parallelize([1, 2, 3, 4])
+        RDD
+        ├── Partition 1 → [1, 2]
+        └── Partition 2 → [3, 4]
+
+    👉 DataFrame - Distributed table with columns and schema Like a SQL table
+    ✔ Features
+    Schema (structured data)
+    Uses Catalyst optimizer + Tungsten engine
+    Faster than RDD
+    ❌ Drawbacks
+    No compile-time type safety
+    Less control than RDD
+
+    👉 Dataset - Combination of RDD + DataFrame and Type-safe API (mainly in Scala/Java)
+    eg(scala):
+    case class Person(id:Int, name:String)
+    val ds = spark.createDataset(Seq(Person(1,"Arun")))
+    ✔ Features
+    Type safety [Type safety means errors related to data types are caught early (before or during execution)]
+    Optimized like DataFrame
+    Better for complex logic
+    ❌ Drawbacks
+    Not fully supported in Python ❌
+    More complex
+
+    | Feature      | RDD  | DataFrame | Dataset    |
+    | ------------ | ---- | --------- | ---------- |
+    | Level        | Low  | High      | High       |
+    | Schema       | ❌   | ✅       | ✅         |
+    | Performance  | Slow | Fast      | Fast       |
+    | Optimization | ❌   | ✅       | ✅         |
+    | Type Safety  | ❌   | ❌       | ✅         |
+    | Language     | All  | All       | Scala/Java |
+
+8. left join vs inner join
+    👉 LEFT JOIN
+    Returns all records from the left table
+    Returns matching records from the right table
+    If no match → NULL values for right table columns
+
+    ✔ Used when:
+    Left table is your main dataset
+    You don’t want to lose any records
+
+    👉 INNER JOIN
+    Returns only matching records from both tables
+    ✔ Used when:
+    You only need valid/common data
+
+9. join and broadcast join
+    👉 Normal JOIN
+    Spark performs a shuffle join
+    Data from both tables is redistributed across nodes
+    Can be slow for large datasets
+
+    👉 BROADCAST JOIN
+    Used when:
+    One table is small
+    Other table is large
+
+    What happens:
+    Small table is broadcasted (copied) to all worker nodes
+    Large table stays where it is
+    No shuffle required ✅
+
+10. distinct vs dropDuplicate
+    👉 distinct - distinct removes duplicate rows based on all columns
+    df.distinct()
+    👉 dropDuplicate - Removes duplicates based on specific columns (subset)
+    df.dropDuplicates(["id"])
+
+11. union vs unionByName
+    👉 union - Combines DataFrames based on column position (order)
+    👉 unionByName - Combines DataFrames based on column names
+
+    for eg - 
+    🔹 Example
+    inputs
+          df1
+        id	name
+        1	Arun
+        2   mohan
+
+            df2
+        name	id
+        Ravi	3
+
+    👉 union output - df1.union(df2)
+    | id   | name |
+    | ---- | ---- |
+    | 1    | Arun |
+    | 2    | mohan|
+    | Ravi | 3    |
+
+    👉 unionByName output - df1.unionByName(df2)
+    | id | name |
+    | -- | ---- |
+    | 1  | Arun |
+    | 2  | mohan|
+    | 3  | Ravi |
+
+12. filter vs where
+They are exactly the same ✅ — just different names
+    👉 filter() - Filters rows based on a condition
+    df.filter(df["salary"] > 50000)
+    👉 where() - Same as filter() (just SQL-style naming)
+    df.where(df["salary"] > 50000)
+
+    🔹 Easy Analogy
+    👉 filter = Python style
+    👉 where = SQL style
+
+13. collect vs take 
+    collect() - Brings ALL data from all partitions to the driver
+    df.collect()
+    ❌ Problem
+    Can cause Out Of Memory (OOM) if data is large
+    Not safe for big datasets
+
+    take(n) - Returns first n elements only
+    df.take(5)
+    ✔ Advantage
+    Safer than collect
+    Reads only required data
+    Faster for preview
+
+14. count vs approx_count_distinct
+    👉 count - Returns total number of rows [Counts all rows Includes duplicates]
+    df.count()
+
+    👉 approx_count_distinct - Returns approximate count of unique values [Counts unique values - Not exact (small error possible)]
+    from pyspark.sql.functions import approx_count_distinct
+    df.select(approx_count_distinct("id"))
+
+15. explode vs posexplode
+    👉 explode - Converts each element into a separate row which doesn't include index
+    👉 posexplode - same as explode ALSO give position(index) for the element
+
+    eg:
+    Input:
+    id	skills
+    1	["Python","SQL"]    
+    
+    👉 explode output:
+    from pyspark.sql.functions import explode
+    df.select("id", explode("skills").alias("skill"))
+    | id | skill  |
+    | -- | ------ |
+    | 1  | Python |
+    | 1  | SQL    |
+
+    👉 posexplode output
+    from pyspark.sql.functions import posexplode
+    df.select("id", posexplode("skills").alias("pos", "skill"))
+    | id | pos | skill  |
+    | -- | --- | ------ |
+    | 1  | 0   | Python |
+    | 1  | 1   | SQL    |
+
+16. window function vs groupBy aggregation
+    👉 groupBY- 
+    What it does:
+    Groups rows
+    Returns one row per group
+    Other row-level details are lost
+
+    👉 window function
+    What it does:
+    Performs aggregation without collapsing rows
+    Keeps all original rows
+
+    🔹 Example
+    Input:
+        | dept | name  | salary |
+        | ---- | ----- | ------ |
+        | IT   | Arun  | 50000  |
+        | IT   | Ravi  | 60000  |
+        | HR   | Meena | 40000  |
+
+    👉 groupBY output:
+    df.groupBy("dept").avg("salary")
+        | dept | avg_salary |
+        | ---- | ---------- |
+        | IT   | 55000      |
+        | HR   | 40000      |
+
+    👉 Window function output:
+    from pyspark.sql.window import Window
+    from pyspark.sql.functions import avg
+    windowSpec = Window.partitionBy("dept")
+    df.withColumn("avg_salary", avg("salary").over(windowSpec))
+    | dept | name  | salary | avg_salary |
+    | ---- | ----- | ------ | ---------- |
+    | IT   | Arun  | 50000  | 55000      |
+    | IT   | Ravi  | 60000  | 55000      |
+    | HR   | Meena | 40000  | 40000      |
+
+17. repartitionByRange vs hash partitioning
+    👉 repartitionByRange - Redistributes data into partitions based on column ranges
+    df.repartitionByRange(3, "salary") -- Distributes data based on value ranges
+    Partition 1 → salary < 30k  
+    Partition 2 → 30k–60k  
+    Partition 3 → > 60k  
+        ✔ Use cases
+        ORDER BY optimization
+        Range filters
+        Window functions
+
+    👉 hash partitioning - Uses a hash function on column values and Assigns rows to partitions based on hash value
+    df.repartition(3, "id")
+    Internally:
+    partition = hash(id) % 3
+    ✔ Features
+    Fast
+    Uniform distribution (mostly)
+    No ordering guarantee
+        ✔ Use cases
+        Joins
+        GroupBy
+
+18. checkpoint vs cache
+    👉 cache - keep data in RAM for quick reuse
+
+    👉 checkpoint - if we have long process it will create a checkpoint in each stages, if we have failure instead of starting from stage 1 it will start process from the last stage where it failed.
+    the main purpose is fault torence [handling failure without stopping process]
+    spark.sparkContext.setCheckpointDir("/tmp/checkpoint")
+    df.checkpoint()
+    ✔ Use when:
+    Very long DAG
+    Risk of recomputation failure
+    Complex pipelines
+    ❗ Important
+    Slower than cache (disk I/O)
+    More reliable
+
+    🔹 Easy Analogy
+    cache = keep data in RAM for quick reuse ⚡
+    checkpoint = save progress permanently 💾
+
+    | Feature     | cache()    | checkpoint()    |
+    | ----------- | ---------- | --------------- |
+    | Storage     | Memory     | Disk            |
+    | Purpose     | Speed      | Fault tolerance |
+    | Lineage     | Maintained | Broken          |
+    | Recompute   | Possible   | Not needed      |
+    | Performance | Faster     | Slower          |
+
+

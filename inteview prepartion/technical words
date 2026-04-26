@@ -11,3 +11,11 @@ what is Data shuffle?
     Data shuffle in Spark is when data is moved across partitions (and often across machines) so that the right data ends up together for processing.
 
 Partitioning → splits data into folders
+
+fault tolerance - handling failure without stopping process
+
+compute- process
+
+unbounded data - rows are columns are not fixed
+
+latency - whenever you have given input to the system and total time period it takes to give output, that time period is known as latency

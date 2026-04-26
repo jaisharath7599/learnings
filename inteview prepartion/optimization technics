@@ -26,6 +26,9 @@ how to OPTIMIZE a slow delta table - run OPTIMIZE, add VACUUM, use ZORDER and ch
 ----------------------------------------------
 CATALYST OPTIMIZER- it looks at your query in databricks and automatically finds the best way to run it
                     - it is built in datbricks - no need to specify
+                    
+TUNGSTEN ENGINE - instead of storing clothes lossely, you can vacuum-pack them - take less space easy to move, same way tungsten pack data tightly into memory
+        which improve memory usage, cpu operation and cache efficiently
 ---------------------------------------------
 
 BROADCAST JOIN - A broadcast join is a join optimization where Spark sends (broadcasts) a small table to all worker nodes, so the join can happen locally without shuffling the big table.
