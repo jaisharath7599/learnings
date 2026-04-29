@@ -19,3 +19,5 @@ compute- process
 unbounded data - rows are columns are not fixed
 
 latency - whenever you have given input to the system and total time period it takes to give output, that time period is known as latency
+
+Pagination - Pagination means breaking a large dataset into smaller chunks

@@ -1,0 +1,19 @@
+✅linked services are used to connect other resources with ADF
+    Real Example (from your project)
+    “In my project, we created Linked Services for:
+    REST API (DD API) → to fetch data
+    Azure Blob Storage → to store data
+    Azure Key Vault → to securely access credentials”
+    These Linked Services are then used inside datasets and activities like Copy Activity to move data.
+
+✅ Types of Triggers in ADF (Important)
+    You can mention this if they ask deeper:
+    Schedule Trigger
+        Runs at fixed intervals (e.g., every day at 6 AM)
+    Tumbling Window Trigger
+        here we can specify start and end time with recurrency [eg - from 27th april 2026 to 27th may 2026 run every hour]
+        Runs for fixed time windows (used for incremental/data consistency)
+        Ensures no data is missed
+    Event-based Trigger
+        Runs when an event occurs (e.g., file arrives in Blob Storage)
+        [this location we will specify while creating the trigger]

@@ -3,12 +3,12 @@
 delta lake -- (ADLS gen2):  
 1. its build on top of apache spark and cloud objects like azure,aws,gcp -- developed by databricks
 2. basically its a storage which can store all type data
-3. it support ACID property, Time travelling, schema enforcement[fail is schema missmatch]
+3. it support ACID property, Time travelling, schema enforcement[fail if schema missmatch]
 4. unified batch ans streaming
 5. it efficiently handles millions of files using a transaction log[_delta_log]
 
 ACID transaction
-A - Atomicity - untill the transaction completed fully data will not been moved, -- completely roll back if any error occur
+A - Atomicity - untill the transaction completed fully data will not been moved, -- completely roll back if any error occurs
 C - consistency - enforces schema constant, which present bad data from being inserted
 I - isolation - multiple user can read/write at same time
 D - Durability - once the transaction is completed data is permentally stored

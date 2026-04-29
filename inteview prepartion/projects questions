@@ -1,0 +1,199 @@
+🔹 Project 1 – Sandbox 2.0 (ADF + API + Databricks)
+
+Why did you remove dependency on NA Data Hub?
+    becauseeeee To eliminate latency and dependency issues. By directly sourcing data from the CDL system using APIs, we achieved faster data availability, reduced dependency on external processing, and improved pipeline reliability.
+
+How does API-based ingestion work in ADF?
+    In ADF, API-based ingestion is typically done using the Copy Activity with a REST/HTTP dataset.
+    Source → REST API (DD API endpoint)
+    Sink → Azure Blob Storage (Landing Zone)
+
+How do you handle pagination in API calls?
+    (Pagination means breaking a large dataset into smaller chunks)
+    Pagination is handled using ADF’s built-in pagination rules or dynamic looping using tokens/page numbers to fetch all data from APIs.
+
+What is the role of Copy Activity in your pipeline?
+    copying data from source to target location
+
+How do you schedule pipelines in ADF?
+    pipelines are scheduled using triggers. The most commonly used trigger is the Schedule Trigger, where we define how frequently a pipeline should run.
+
+    We configure:
+    Start time
+    Recurrence (hourly, daily, weekly, etc.)
+    Time zone
+
+    ✅ Types of Triggers in ADF (Important)
+    You can mention this if they ask deeper:
+    Schedule Trigger
+        Runs at fixed intervals (e.g., every day at 6 AM)
+    Tumbling Window Trigger
+        here we can specify start and end time with recurrency [eg - from 27th april 2026 to 27th may 2026 run every hour]
+        Runs for fixed time windows (used for incremental/data consistency)
+        Ensures no data is missed
+    Event-based Trigger
+        Runs when an event occurs (e.g., file arrives in Blob Storage)
+        [this location we will specify while creating the trigger]
+
+What are Linked Services in ADF?
+    linked services are used to connect other resources with ADF
+
+    ✅ Real Example (from your project)
+    “In my project, we created Linked Services for:
+    REST API (DD API) → to fetch data
+    Azure Blob Storage → to store data
+    Azure Key Vault → to securely access credentials”
+    These Linked Services are then used inside datasets and activities like Copy Activity to move data.
+
+How do you secure credentials in ADF?
+    In Azure Data Factory, we secure credentials using Azure Key Vault.
+    Instead of hardcoding sensitive information like passwords, API keys, or SAS tokens in pipelines, we store them as secrets in Key Vault. Then, in ADF:
+        We create a Linked Service to Key Vault
+        Reference those secrets dynamically inside other Linked Services (like Blob, REST API)
+
+How does ADF trigger Databricks notebooks?
+    frist we need to create a linked service for databricks and then we need to select the databricks activity where we can select the required notebook from it
+
+    First, we create a Linked Service to Databricks by providing:
+        Workspace URL
+        Authentication (Access Token or Managed Identity)
+        Cluster details
+
+    Then in the pipeline:
+        Add a Databricks Notebook Activity
+        Select the notebook path
+        Pass required parameters (like file path, load type, etc.)
+
+How do you handle incremental data loads?
+    In ADF (API / Source Level)
+        Pass the watermark value as a parameter to API or query
+        Fetch only incremental data
+        Update watermark after successful load
+    
+    In Databricks (Delta Lake)
+        Use MERGE (UPSERT) to:
+        Insert new records
+        Update existing records
+
+What transformations did you perform in Databricks?
+    transformations like join, withcolumn, windows functions, groupBy etc
+    We performed data cleaning, schema validation, joins, aggregations, incremental processing, and business transformations using PySpark in Databricks.
+
+How does Delta Lake ensure ACID properties?
+    Delta Lake ensures ACID by using a transaction log and optimistic concurrency control to manage reliable, consistent, and concurrent data operations
+
+What is schema enforcement?
+    prevent inserting the bad records.- fail if schema missmatch
+
+How do you optimize Databricks jobs?
+    We optimize Databricks jobs at multiple levels—data, code, and cluster configuration.
+    1. Data Optimization
+        we use Liquid Clustering, 
+    2. Query Optimization
+        Avoid unnecessary columns (select only required fields) 
+        Avoid wide transformations when possible
+        Use broadcast joins for small tables
+    3. Handling Skew & Shuffle
+        Repartition data properly
+        Handle data skew using salting techniques
+        Minimize shuffle operations
+    4. Cluster Optimization
+        Choose appropriate cluster size and type
+        Enable auto-scaling
+        Use job clusters for batch jobs
+
+How is data consumed in Power BI?
+    in power BI, our gold table will be linked to the report when our table get refected the report will also get refected
+
+🔹 Project 2 – Informatica to Databricks Migration
+Why migrate from Informatica to Databricks?
+
+How did you convert Informatica workflows to PySpark?
+How do you handle lookup transformation in PySpark?
+How do you implement incremental loads in PySpark?
+What challenges did you face during migration?
+How did you validate migrated data?
+How does Unity Catalog help in governance?
+How do you manage access control in Databricks?
+What is the difference between Informatica ETL and Spark ETL?
+
+🔹 Project 3 – POS Pipeline (ADF Orchestration)
+What is the purpose of Master Pipeline?
+How does your Master Pipeline control parallel execution?
+How do you calculate available job slots?
+What is metadata-driven pipeline design?
+How does ForEach activity work in ADF?
+What is Execute Pipeline activity?
+How do you validate files in ADF?
+How do you handle invalid files?
+What is the role of File Handler pipeline?
+How do you ensure idempotency in pipelines?
+How do you implement logging in ADF?
+🔹 Project 4 – Metadata-Driven Databricks Pipeline
+What is metadata-driven architecture?
+How does your file orchestrator work?
+How does job orchestrator control execution?
+How do you ensure only one job runs per retailer?
+How do you pass parameters dynamically to jobs?
+Why did you design jobs based on granularity instead of file?
+Explain your bronze, silver, gold layers.
+What is process_run_key?
+How do you track job status?
+How do you handle failed jobs?
+What is your retry mechanism?
+What is auto-healing job?
+How do you implement CDC in Delta Share?
+What is schema evolution?
+How do you handle missing columns dynamically?
+What is mergeSchema?
+How do you design reusable pipelines?
+🔹 Databricks & PySpark
+What is Spark architecture?
+Difference between RDD, DataFrame, Dataset?
+What are transformations and actions?
+What is lazy evaluation?
+What is partitioning?
+Difference between repartition and coalesce?
+What is broadcast join?
+How do you optimize joins?
+What is caching and persistence?
+What is shuffle?
+How do you handle skewed data?
+🔹 Delta Lake
+What is Delta Lake?
+What are Delta Lake features?
+What is time travel?
+What are Delta tables?
+What is Z-ordering?
+What are deletion vectors?
+How does Delta handle schema evolution?
+🔹 ADF (Azure Data Factory)
+What are different activities in ADF?
+What is Integration Runtime?
+Difference between Self-hosted and Azure IR?
+What is trigger in ADF?
+What is parameterization?
+How do you handle errors in ADF?
+What is tumbling window trigger?
+🔹 Airflow
+What is DAG?
+How does Airflow scheduling work?
+Difference between ADF and Airflow?
+What operators have you used?
+🔹 CI/CD & Git
+How did you implement CI/CD in Databricks?
+How do you move notebooks from dev to prod?
+What is YAML file in your project?
+How do you version control your code?
+🔹 Utility Notebooks
+How does your dataframe comparison notebook work?
+How did you implement file cleanup logic?
+How do you track deleted files?
+How did you automate Unity Catalog access?
+🔹 Scenario-Based Questions
+What will you do if a pipeline fails in production?
+How do you debug a failed Databricks job?
+What if API is slow or fails?
+How do you handle large file ingestion?
+How do you ensure data quality?
+How do you design a scalable pipeline?

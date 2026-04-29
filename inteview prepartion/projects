@@ -1,0 +1,287 @@
+PROJECT 01 - SANDOX 2.0
+In our earlier system (Sandbox 1.0), we were depending on an intermediate system called NA Data Hub (NA DH) to get refined data. This created delays and dependency issues because we had to wait for NA DH processing before using the data.
+In the new system (Sandbox 2.0), we improved this by removing that dependency completely.
+
+1. data source - data mutilpe data sources:
+    MDM (Master Data)
+    Shipment
+    Media
+    Trade Panel (unrefined)
+    Both refined and unrefined data are now sourced using APIs instead of storage dependencies.
+
+2. Ingestion Layer (ADF)
+    We used Azure Data Factory for ingestion and orchestration.
+
+    ADF pipelines call DD APIs to fetch data
+    Data is landed into Azure Blob Storage (Landing Zone)
+    Pipelines are scheduled using triggers:
+    Media data → daily
+    MDM → every 6 hours
+
+    We used:
+    Copy Activity (API → Blob)
+    Linked Services for connectivity
+    Key Vault for storing secrets (SAS keys, credentials)
+
+3. Processing Layer (Databricks)
+
+    “Processing is done using Databricks with PySpark.
+    Created separate databases for:
+    MDM
+    Media
+    Shipment
+    Tables are built on top of blob storage paths
+
+    Transformations include:
+    Data cleaning
+    Schema validation
+    Business transformations
+
+    We used Delta Lake features like:
+    ACID transactions
+    Schema enforcement”
+
+4. Orchestration
+
+    “ADF orchestrates the complete flow:
+    Trigger pipeline
+    Fetch data via API
+    Store in Blob
+    Trigger Databricks notebooks
+    Load processed data into final tables”
+
+Copy activity [copy data from souce and push it into blob storage[landing zone] -- using ddapi call]
+    |
+data bricks notebook trigger from ADF
+    |
+databricks will read the data from landing zone and process it and pushed into gold table
+    |
+gold table has been linked to power BI where reports will be reflected
+
+Your Role (Say This Confidently)
+“I worked on ADF pipeline development for API ingestion, handled scheduling and orchestration, and developed Databricks notebooks for transforming and loading data into curated tables. I also worked on storage mounting, incremental logic, and performance optimization.”
+
+---------------------------------------------------------------------------------------------------------
+
+project 2: informatica to databricks migration
+In this project, we migrated legacy ETL pipelines built in Informatica into a modern data processing framework using Databricks and PySpark.
+
+My Initial Role – Databricks Administration
+    “At the beginning of the project, I worked on the Databricks setup and administration side.
+
+    Created and configured Databricks workspaces, clusters, and notebooks
+    Set up Unity Catalog for centralized data governance
+    Created databases and tables on top of storage (ADLS/Blob)
+    Managed access control:
+        Granted permissions at catalog, schema, and table level
+        Implemented role-based access for users and teams
+
+    This ensured a secure and structured environment before starting the migration.”
+
+Core Work – Migration from Informatica to PySpark
+    “After the setup, I was involved in converting Informatica workflows into PySpark-based pipelines.
+
+    Analyzed existing Informatica mappings, transformations, and workflows
+    Converted them into PySpark logic in Databricks notebooks
+    Recreated key transformations such as:
+        Joins
+        Aggregations
+        Filters
+        Lookups
+        Incremental loads
+
+    We ensured that the business logic remained consistent during migration.”
+
+at last we have build a framework that help to compare the output from informatica and databricks pipeline
+
+---------------------------------------------------------------------------------------------------------
+
+project 3 - POS Data Pipeline (ADF + Databricks)
+its infosys internal project 
+This project is about building a data pipeline to process POS (Point of Sale) data using Azure Data Factory and Databricks.
+
+High-Level Architecture
+Pipeline is mainly divided into two parts:
+    1. Master Pipeline → Orchestration layer
+    2. File Handler Pipeline → Core processing logic
+
+Master Pipeline - 
+here first task is databricks notebook, where it check for current run jobs and available job slot, based on this it will create a list and then it will be passed to the for each activity ADF pipeline.
+for loop Calls the File Handler pipeline using Execute Pipeline activity
+[This master pipeline is used to control and manage job execution. It first checks how many jobs can run in parallel based on system capacity. Then it selects the next set of jobs from a metadata table based on priority and status.
+Once the jobs are selected, it updates their status to ‘in progress’ and sends the job list back to ADF. ADF then loops through this list and triggers the actual processing jobs[file handler].
+Overall, it ensures controlled, priority-based, and efficient execution of multiple jobs without overloading the system.]
+
+File Handler Pipeline - 
+Step-by-step flow:
+🔹 1. File Detection
+Checks if new files are available in source location
+Uses Get Metadata activity
+
+🔹 2. Loop Through Files
+Uses ForEach activity
+Processes multiple files dynamically
+
+🔹 3. File Validation
+Validates:
+    File format
+    File name pattern
+    File size / structure
+👉 If validation fails → move file to error folder
+
+🔹 4. Data Ingestion
+Uses Copy Activity
+Moves data from source → landing zone (Blob/ADLS)
+
+🔹 5. Processing Trigger
+Calls Databricks Notebook activity
+Performs:
+    Transformations
+    Data cleaning
+    Business logic
+
+🔹 6. Post Processing
+Move processed files to archive folder
+Maintain logs (success/failure)
+
+---------------------------------------------------------------------------------------------------------
+
+project 4:
+this is my last project where I worked in infosys from past 1.5 years,
+this is purely databricks project and we had metadata-driven approach, where we get data from different sources like file, delta share and api calls
+we need to read them everyday and push them into corressponding tables, to achive this we have created multiple databricks jobs and set up metadata.
+flow - once the file uploaded into databricks volume our orchestration will check the file pattern based on this it will pull the metadata information to that corresponding file and trigger the main job for that file
+
+orchestation - we have two job for this where 
+    a. file orchestrator - which will keep on checking for file availablitiy in the volume, if there are new file it will pull those files and check the file name is available in our metadata table, if its available it will pull the information like retailer info, granular info and which job need to be triggered for this file etc, and then it will push that file into landing zone[volume], and make an enrty in the job metadata table for that file that status as preparing.
+    if file metadata is not available file will be pushed to rejected folder..
+    b. job orchestrator - this will check that job table for status which is preparing and then trigger, if any entry is present then it will check for the availablity slot of that file[means is there any job is already run for that retiler or not] then trigeer the corresponding job and make the status has started.. and while trigger the job it will passes the inputs that required to run in the main job.
+
+for each file we don't different job, we have created a job based on the granular code[pos, daily job, weekly job, monthly job etc], based on the orchestrator input jobs will be run for different retailers
+
+main job - it start with the bronze layer, where it read the input file the landing zone and pushes that data into bronze table and then only the todays data has been pushed into metalized path based on the proces_run_key -- this add will be read in the next tasks and then we have other tasks like orphan, interim silver, silver and post processing - here it will make job status has completed and push the file into archive path, if any tasks failed in between then failed_job task will be executed which make the status as failed.
+in job table we have kept the infomation like job started, ended time, status etc
+
+all this tasks are python files which we are stored in the github and with the pytest file[to test our python files to test all the secrios], on top of this file we have create a job yaml file, which will run in the databricks. 
+
+this is for the regular job but for deltashare it bit different, here we check of the status table entry, if we have entry for that table when corresponding job will be triggered. here we had CDC and schema evloution has well and for API its schedule jobs.
+schema evloution- where for transformation we have used source column and then transformation which need to be applied for that, if any column is not available job shouldn't fail it need to check if source column is available in the dataframe or not if not available it will send mail to the user and skip that trans, while wrting we used merge shema has true.
+
+we also implimented auto healer job, which will run every 1hrs and take all the failed process from process_run tabl and it will repair the job run for 3 times if till failed then send the mail to the corresponding team
+
+--in points------------------->
+
+“This was my last project at Infosys, where I worked for around 1.5 years. It was a completely Databricks-based project designed using a metadata-driven architecture.
+
+We ingested data from multiple sources such as:
+    Files (uploaded to Databricks volumes)
+    Delta Sharing
+    API calls
+
+The goal was to process data daily and load it into corresponding tables in a scalable and automated way.”
+
+High-Level Flow
+“Whenever a file is uploaded to the Databricks volume, our orchestration layer detects it, identifies the file pattern, and fetches the corresponding metadata. Based on that, it triggers the appropriate processing job.”
+
+Orchestration Layer
+“We designed two main orchestrators:
+1. File Orchestrator
+    Continuously monitors the volume for new files
+    Validates file name/pattern against metadata
+    Fetches details like:
+    Retailer info
+    Granularity (daily/weekly/monthly)
+    Job to be triggered
+    Moves valid files to landing zone
+    Inserts an entry in job metadata table with status as ‘PREPARING’
+    Invalid files are moved to a rejected folder
+2. Job Orchestrator
+    Monitors job metadata table
+    Picks jobs with ‘PREPARING’ status
+    Checks for execution constraints (like retailer-level parallelism)
+    Triggers the respective job with required parameters
+    Updates job status to ‘STARTED’
+
+Job Design (Dynamic Execution)
+“We didn’t create separate jobs per file.
+Instead, we designed jobs based on granularity (POS, daily, weekly, monthly).
+Based on orchestrator inputs, the same job dynamically processes data for different retailers.”
+
+Main Processing Flow (Medallion Architecture)
+“Each job follows a layered architecture:
+
+Bronze Layer
+    Reads raw data from landing zone
+    Stores it in bronze tables
+Intermediate Layers
+    Orphan handling
+    Interim silver
+Silver Layer
+    Cleaned and transformed data
+Post-processing
+    Updates job status to completed
+    Moves files to archive
+
+If any step fails:
+    A failure handler updates status to ‘FAILED’”
+Job Tracking
+    “We maintain a metadata table to track:
+
+    Job start time
+    End time
+    Status (Preparing, Started, Completed, Failed)”
+    
+Code & Deployment
+“All processing logic is written in Python and stored in GitHub.
+    Unit testing is done using pytest
+    Jobs are deployed using YAML configuration
+    Databricks jobs are created based on these YAML files”
+
+Delta Share & API Handling
+Delta Share:
+    Jobs are triggered based on status table entries
+    Implemented CDC (Change Data Capture)
+    Handled schema evolution
+API:
+    Scheduled jobs for data ingestion   
+    Schema Evolution Handling
+
+“We built dynamic transformations:
+    Checked if source columns exist before applying transformations
+    If missing → skipped transformation + sent notification
+    Used mergeSchema = true while writing data”
+
+Auto-Healing Framework
+“We implemented an auto-healer job:
+    Runs every 1 hour
+    Picks failed jobs from metadata table
+    Retries up to 3 times
+    If still failing → sends alert to support team”
+
+Key Highlights
+✔ Fully metadata-driven pipeline
+✔ Dynamic job execution
+✔ Supports multiple data sources
+✔ Built-in failure handling & auto-recovery
+✔ Scalable and reusable architecture
+
+----------------------------------------------------------------------------------------------
+
+along with this I also worked on creating a following databricks notbooks
+1. notebook helps to compare 2 dataframe and give u the comparsion results
+2. file clean up notebook - we have 3 scenario
+    a. delete all the file inside a folder
+    b. delete files older then 7days
+    c. skip the specific folders completely
+also we need to store the deleted files info
+3. unity catalog access control - created automated notebook that helps to grant permission on catalog, schema as well as table
+
+I also worked on the set up CICD pipelines to move notebook from develop to prod databricks env via github
+
+and also worked Airflow dag creations
+
+--------------------------------------------------
+
+
+
+
