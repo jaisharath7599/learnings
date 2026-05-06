@@ -1,0 +1,237 @@
+what are the problem we faced before orchestration tools:
+    1. if we had any error there is no retry
+    2. manual execution with many dependency
+    3. zero visibity on task progress 
+    4. single point of failure can clause hours of downtime
+
+to overcome above problem we have airflow ---
+
+            ABOUT AIRFLOW
+Apache Airflow was created in 2014 by Maxime Beauchemin at Airbnb
+to solve the growing complexity of their data pipelines. 
+It was open-sourced in 2015 and became an Apache Top-Level Project in 2019.
+
+Directed Acyclic Graphs (DAGs) -- represent workflows as a set of tasks with explicit dependencies —ensuring tasks execute in the correct order, with no circular loops.
+
+DAGs
+Directed - it has clear order 
+Acyclic - no loop execution
+graphs - everything is connected and clearly visible
+
+            AIRFLOW ARCHITECTURE
+the components are -
+
+in simple words- 
+1. scheduler - which deside which dag need to run and when it need to run.. what are dependencies --  it will be continuesly scaning 
+
+2. Metadata batabase - memory which store all the information about dags and dags runs like which is success and failed etc.. its in the center which comunicate with all the components
+
+3. message queue - which is dispatcher..once a scheduler descide what need to run then it will pass a message to this queue.. the queue will tell workers to pick the ready task
+
+4. workers - this will execute actually python tasks... 
+
+5. webserver - is like front end [airflow UI] which will show the executions
+
+all the execution will start with scheduler and it will pass those info it will pass to metadata and from metadata message queue will pick up those task and decide which worker need to execute them.. then worker execute that task and then pass the metadata from metdata webserver will show the execution status in airflow UI
+
+full explanation about each components- 
+1. scheduler - the conductor of the orchestra
+core reponsiblities - 
+    a. continously monitors all the dags and task
+    b. trigger task instances when dependencies are satisfied
+    c. submit ready tasks to executor for disptach
+how it works 
+    it run non-stop in a loop, and read valid dags files available and check of schedule time if need to trigger and it will check for the dependencies and if everything is ready then it will tell this task need to execute now..
+in airflow 2.x, mutliple schedulers can run simultaneously for high avaliablity and improved throughput..
+
+2. Webserver - your command center
+    a. we can inspect and mointor -  we can brower all dags, view task states in the graph views and also track the history of dag run
+    b. manual triggers - now we can manually pass the required parameters and trigger the dag .. no command line access required
+    c. Debug execution - access ful task logs[in Xcom values], and trace the exact failure point..
+    d. system health - mointor overall aiflow health, including scheduler heatbeat, import errors and connection statuses
+its also provide role-based access control(RBAC) interface... means we can control which user can have access.
+
+3. Dag processor - the translator
+    airflow will not run the python files directly, which the help of processor python files will be converted into JSON.. 
+    where it read the dag python file and convert into JSON which will stored in the metadata database. this json file will be accessed by other components like scheduler, webserver etc
+flow:
+    dag file(python) -> DAG processor -> serialized dag(JSON) -> metadata DB -> scheduler + webserver
+
+why this matter- 
+    a. our dag file is just a python file it may have bug and unsafe code, so instead of scheduler can run it directly frist it will handle by processor [If something breaks, it doesn’t crash the main system]
+    b. scheduler doesn't waste time in file read and parsing, processor will take of it so scheduler only concentrate on which task need to trigger..[Divide work → system becomes faster]
+    c. webserver doesn't need to read the python file where it will read already processed data [UI just reads ready-made info instead of raw code]
+
+4. Executor - 
+The Scheduler decides what to run, The Executor decides how and where to run it..
+
+TYPES:  
+    a. SequentialExecutor 🐢 - 
+        Runs only 1 task at a time, Everything happens in the same place
+        👉 Like:
+        One worker doing all jobs one by one
+        ✔️ Good for: development, testing
+        ❌ Bad for: real projects (too slow)
+    b. LocalExecutor ⚡-
+        Runs multiple tasks in parallel
+        Uses same machine (your server)
+        👉 Like:
+        One person using multiple hands (or threads)
+        ✔️ Good for: small to medium projects
+        ❌ Limited by machine power
+    c. CeleryExecutor 🌐-
+        Sends tasks to multiple worker machines
+        Uses a message queue (like a task distributor)
+        👉 Like:
+        Manager assigns work to many employees in different locations
+        ✔️ Good for: production, scaling
+        ✔️ Can handle heavy workloads
+        ❌ Needs setup (Redis/RabbitMQ)
+    d. KubernetesExecutor ☁️
+        Each task runs in its own container (pod)
+        Fully isolated
+        👉 Like:
+        Giving each task its own temporary machine
+        ✔️ Best for: large-scale, cloud setups
+        ✔️ Very flexible and efficient
+        ❌ More complex to set up
+
+    🔥 Easy way to remember
+    Sequential → 1 task
+    Local → many tasks, same machine
+    Celery → many machines
+    Kubernetes → each task gets its own environment
+
+5. Worker - the execution squad
+    worker are the processess or containers that actually execute the business logic defined in our airflow tasks.
+    they recevie work assignments from the executor and report results back to the metadata database.
+
+    they are 2 worker modles-
+        1. calery workers - Always running in the background, Waiting for tasks
+        👉 Like:
+        Employees sitting in office waiting for work
+        ✔️ Fast (no startup delay)
+        ✔️ Good for continuous workloads
+
+        2. Kubernetes Pods ☁️
+        Created only when a task comes
+        Deleted after task finishes
+        👉 Like:
+        Hiring a temporary worker for one job and releasing them after
+        ✔️ Very efficient
+        ✔️ No resource waste
+        ✔️ High isolation
+
+More workers = more parallel tasks
+
+Autoscaling (production concept)
+With tools like Kubernetes:
+If workload increases → more workers created
+If workload decreases → workers reduced
+👉 Saves cost + improves performance
+
+6. Metadata DB - the single source of truth
+
+    what is stores - DAG definitions, DAG Runs, task instances and their states, variables, connections, XCom values, user accounts, and audit logs — every piece of operational state lives here.
+
+    suppored backends - postgreSQL is recommended, MySQL is also supported. SQLite is available for local development only and does not suppoer parallelism
+    by default metadata DB will be SQLite
+
+    central coordinator - every airflow component reads from and write to the metadata db, make it coordination backbone of the entire system
+
+7. Message Queues - 
+why queues are needed - 
+        in small setup, scheduler can directly assign the task to the workers.. 
+        but in larger setup [like CeleryExecutor]- workers may be on different machines, scheduler cannot directly talk to all of them,
+        so intead - schedule drop tasks into a queue, workers pick tasks from the queue when ready..
+        🔁 Simple flow
+        👉 Scheduler → puts task in queue
+        👉 Queue → holds tasks
+        👉 Worker → picks task → executes
+        👉 Worker → updates result in DB
+
+why this is powerfull
+    1. asynchronous - scheduler doesn't wait for workers
+    faster system
+    2. decoupling - scheduler and worker doesn't depend on each other directly
+    if worker is down -> queue still holds tasks
+    3. handle traffic spikes - if too many tasks queue stores them temporarily.. workers process them one by one
+
+types - 
+    1.  Redis
+    Fast, simple, in-memory
+    Most commonly used
+    👉 Like: quick lightweight system
+    2. RabbitMQ
+    More advanced features
+    Better control over message routing
+    👉 Like: enterprise-level system
+
+we don't use queue in all the type of exector, we only use when we have Celery
+
+👉 Executor changes how tasks are executed
+Executor	Uses Queue?	Uses Workers?
+Sequential	❌	        ❌
+Local	    ❌	        ❌  (local processes)
+Celery	    ✅	        ✅
+Kubernetes	❌	        ✅ (dynamic pods)
+
+8. Trigger - Think of the Triggerer as a smart watcher that waits for things without wasting resources.
+
+What problem it solves 
+    Earlier in Airflow:
+    A task (like a sensor) keeps checking:
+    👉 “Has file arrived?”
+    👉 “Is API ready?”
+    ❌ While waiting → it holds a worker slot
+    ❌ Worker just sits idle for hours → waste
+
+    🚀 What Triggerer does
+    👉 Instead of blocking a worker:
+    Task says: “I’ll wait… but not here”
+    It hands over waiting job to Triggerer
+
+🔁 Simple flow
+Task starts on worker
+Task says: defer() (I’ll wait)
+Worker is freed immediately ✅
+Triggerer keeps checking condition
+When ready → task goes back to worker and continues
+
+9. Dag file - blueprint of your workflow.
+
+A DAG file is just a Python script where you:
+    1. Create a DAG (the workflow)
+    👉 This is like naming and defining your pipeline
+    DAG ID (name)
+    Schedule (daily, hourly, etc.)
+    Start date
+    2. Define tasks (Operators)
+    👉 These are the actual steps
+    Examples:
+    PythonOperator → run Python code
+    BashOperator → run shell commands
+    HttpOperator → call APIs
+    👉 Each task = one unit of work
+    3. Set dependencies (order)
+    Decide which task runs first
+    task1 >> task2
+    4. Use Connections & Variables
+
+Best practices
+    1. Keep DAG file lightweight
+        ❌ Don’t do heavy work inside DAG file
+        ✔️ Only define structure
+        👉 Because Airflow reads it frequently
+    2. Use Git
+    3. Use decorators (@dag, @task)
+    4. Parameterize (reuse DAG)
+        don't hardcode values
+
+Key Elements
+    1. DAG object — defines ID, schedule, start date, and defaults
+    2. Operators — PythonOperator, BashOperator, HttpOperator, etc.
+    3. Dependencies — explicit task ordering via the bitshift operator
+    4. Connections & Variables — externalized configuration for
+    portability
+
