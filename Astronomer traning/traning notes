@@ -3,3 +3,88 @@ https://teams.microsoft.com/meet/269202872022744?p=4v1cGoJQdQWe56RGXO
 
 traning content link
 https://drive.google.com/drive/folders/18kGTB2ICaAISvVQ_0tqu71VaiBeh-Tdg?usp=sharing
+
+
+steps to create a dag
+1. ssh -i airflow-key.pem ubuntu@13.56.226.121
+2. ls -- check we have airflow-docker if present then change directly
+3. cd airflow-docker
+4. ls -- we have to check the folder
+5. cd dags
+6. nano ecommerce_order_pipeline.py -- nano <new dag name>
+    after enter -- we need to entry the python code and then ctrl+s and ctrl+x
+            this will make the save and exist
+7. after this check in the UI after some time dag will be created if there is no error
+
+8. to check the configration[airflow config] - 
+    go for airflow-docker folder -- open -- nano docker-compose.yaml where u can change the required config and check current config
+
+to perfrom entire setup -- 
+1. login to vm
+2. nano setup.sh --create this script .. paste below cammands
+#Paste the below script:
+ 
+#!/bin/bash
+ 
+set -e
+ 
+echo "Updating packages..."
+sudo apt update -y
+ 
+echo "Installing Docker..."
+sudo apt install -y docker.io
+ 
+echo "Starting Docker service..."
+sudo systemctl start docker
+ 
+echo "Enabling Docker service..."
+sudo systemctl enable docker
+ 
+echo "Adding ubuntu user to docker group..."
+sudo usermod -aG docker ubuntu
+ 
+echo "Installing Docker Compose..."
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/bin/docker-compose
+ 
+sudo chmod +x /usr/local/bin/docker-compose
+ 
+echo "Creating Airflow directories..."
+mkdir -p /home/ubuntu/airflow-docker/dags
+mkdir -p /home/ubuntu/airflow-docker/logs
+mkdir -p /home/ubuntu/airflow-docker/plugins
+mkdir -p /home/ubuntu/airflow-docker/config
+ 
+cd /home/ubuntu/airflow-docker
+ 
+echo "Downloading Airflow docker-compose.yaml..."
+curl -LfO 'https://airflow.apache.org/docs/apache-airflow/2.9.1/docker-compose.yaml'
+ 
+echo "Setting AIRFLOW_UID..."
+echo "AIRFLOW_UID=50000" > .env
+ 
+echo "Initializing Airflow database..."
+sudo docker-compose up airflow-init
+ 
+echo "Starting Airflow services..."
+sudo docker-compose up -d
+ 
+echo "Listing running containers..."
+sudo docker-compose ps
+ 
+echo "Docker version:"
+docker --version
+ 
+echo "Docker Compose version:"
+docker-compose --version
+ 
+echo "Airflow setup completed successfully."
+
+4. run-- chmod +x ./setup.sh
+ 
+5. run--./setup.sh
+
+--docker-compose up -d = to start the ùp and runing
+
+
+ 
