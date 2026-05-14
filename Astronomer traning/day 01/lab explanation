@@ -1,0 +1,124 @@
+step 1
+to connect to VM:
+
+frist we need download a airflow-key.pem file and then open command prompt from download folder and run below command
+>>ssh -i astro-key.pem ubuntu@your-public-ip 
+This command is used to connect to a remote Linux server (usually an AWS EC2 instance) using SSH.
+ssh -i astro-key.pem ubuntu@13.234.45.67 -->Connect to the server with IP 13.234.45.67 using username ubuntu and authenticate using the key file astro-key.pem
+
+>>sudo apt update
+
+This command is used in Ubuntu/Linux to update the package list from the internet.
+It does not install updates.
+It only checks and downloads the latest package information.
+
+Install Python & Dependencies 
+>>sudo apt install python3-pip python3-venv -y 
+
+        Setting up Airflow as a Docker Container
+
+1. Update Ubuntu Packages
+>>sudo apt update
+Refreshes the package repository list.
+
+2. Install Docker
+>>sudo apt install -y docker.io
+Installs Docker engine.
+-y → auto confirms installation.
+
+3. Start Docker Service
+>>sudo systemctl start docker
+Starts Docker immediately.
+>>sudo systemctl enable docker
+Makes Docker start automatically after reboot.
+
+4. Allow Ubuntu User to Use Docker Without sudo
+>>sudo usermod -aG docker ubuntu
+Adds user ubuntu to Docker group.
+Without this, you must use:
+>>sudo docker ps
+After this change, you can use:
+>>docker ps
+
+5. Apply Group Changes
+>>newgrp docker
+Refreshes group permissions without logout/login.
+
+6. Verify Docker Installation
+>>docker --version
+Example output:
+Docker version 26.x.x
+
+7. Install Docker Compose
+Your command has a formatting issue.
+Use this corrected command:
+>>sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+Make it executable:
+>>sudo chmod +x /usr/local/bin/docker-compose
+Verify:
+docker-compose --version
+
+8. Create Airflow Project Folder
+>>mkdir ~/airflow-docker && cd ~/airflow-docker
+Creates a dedicated folder for Airflow.
+
+9. Create Required Directories
+>>mkdir -p ./dags ./logs ./plugins ./config
+Folders meaning:
+Folder	Purpose
+dags	Airflow DAG files
+logs	Task logs
+plugins	Custom plugins
+config	Configurations
+
+10. Download Official Airflow Docker Compose File
+>>curl -LfO 'https://airflow.apache.org/docs/apache-airflow/2.9.1/docker-compose.yaml'
+Downloads official Airflow container setup.
+
+11. Set AIRFLOW_UID
+>>echo -e "AIRFLOW_UID=$(id -u)" > .env
+Creates .env file.
+Verify:
+cat .env
+Expected:
+AIRFLOW_UID=1000
+This prevents file permission issues.
+
+12. Initialize Airflow Database
+>>docker-compose up airflow-init
+This:
+Creates Airflow metadata DB
+Creates admin user
+Initializes setup
+This step may take a few minutes.
+
+13. Start Airflow Services
+>>docker-compose up -d
+Starts all containers in background.
+Services include:
+webserver
+scheduler
+postgres
+redis
+triggerer
+
+14. Verify Running Containers
+>>docker-compose ps
+You should see multiple running containers.
+
+15. Access Airflow UI
+Open browser:
+http://YOUR_PUBLIC_IP:8080
+Example:
+http://13.234.xx.xx:8080
+
+Default login:
+Username	Password
+airflow	airflow
+
+-- to create a new dag
+>>cd ~/airflow/dags 
+>>nano ecommerce_order_pipeline.py -->ctrl+s and ctrl+X
+after this we can see ecommerce_order_pipeline dag in UI
+

@@ -1,0 +1,100 @@
+---------------------------------------------------------------------------------
+*  Remote Execution Agents & Hybrid Execution in Astronomer Airflow *
+---------------------------------------------------------------------------------
+
+Understand the Main Problem
+
+Normally in traditional Airflow:
+    Scheduler runs tasks
+    Workers execute tasks
+    Everything is usually inside one environment
+
+So:
+    Airflow Scheduler + Workers + Data
+            ALL TOGETHER
+This becomes a problem for companies like:
+
+Banks
+Healthcare companies
+Government organizations
+Because their data is sensitive.
+
+Examples:
+    Customer bank transactions
+    Medical records
+    Government data
+    These companies cannot allow data to freely move into cloud environments because of compliance rules like:
+    GDPR
+    HIPAA
+    SOC 2
+
+this problem we called as -- “Data Sovereignty”
+Meaning:
+Data must stay inside a controlled/private environment.
+
+---------------------------------------------------------------------------------
+
+# Introducing Remote Execution: Decoupling[saparating] Orchestration and Execution
+    Remote Execution solves the sovereignty challenge by cleanly separating where you orchestrate from where you execute. The two planes operate independently, connected only through secure outbound channels.
+
+What is Orchestration?
+    Orchestration means:
+        deciding task order
+        scheduling DAGs
+        monitoring DAG runs
+        retry logic
+        dependency management
+
+    Example:
+        Task A → Task B → Task C
+        Scheduler manages this.
+
+What is Execution?
+    Execution means:
+        Actually running code.
+    Example:
+        PySpark job
+        SQL query
+        API call
+        ML model
+
+Astronomer divides system into 2 planes.
+
+Plane 1: Orchestration Plane 
+    Managed by Astronomer cloud.
+
+    Contains:
+    Airflow Scheduler
+    Webserver
+    Metadata DB
+    API server
+
+Plane 2: Execution Plane
+    Customer controlled.
+
+    Contains:
+    Kubernetes cluster
+    Remote agents
+    Workers
+    Actual data processing
+    Sensitive data stays here.[Sensitive data never leaves your execution plane]
+
+Easy Analogy
+    Imagine:
+    Astronomer Cloud = Manager
+    Manager only says:
+    "Run Task A now"
+    But actual work is done inside company office.
+
+* MOST IMPORTANT CONCEPT
+    “Decoupling”
+        Means: Scheduling is separated from execution
+        This is the core idea of the whole chapter.
+
+---------------------------------------------------------------------------------
+#                     Remote Execution Agents:
+
+
+
+
+            

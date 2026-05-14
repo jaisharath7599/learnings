@@ -87,4 +87,18 @@ echo "Airflow setup completed successfully."
 --docker-compose up -d = to start the ùp and runing
 
 
- 
+log in astro
+
+in cmd1 -- write -- astro login
+some url will appear like below
+https://auth.astronomer.io/authorize?prompt=login&audience=astronomer-ee&client_id=5XYJZYf5xZ0eKALgBH3O08WzgfUfz7y9&redirect_uri=http://localhost:12345/callback&scope=openid%20profile%20email%20offline_access&response_type=code&response_mode=query&code_challenge=wkPPQ_UDRX50pMTO8eDQU-nORTyLcYR1AFij21h4qEI&code_challenge_method=S256
+
+this a local-- we need to connect this into our vm for that -- 
+open other cmd2 -- ssh -i airflow-key.pem -L 12345:localhost:12345 ubuntu@54.67.129.99
+
+after connect into VM then open the above link in brower and then perform the login
+
+after this in atro login u can see the successfull login message
+
+and to check the connect is done --
+astro workspace list -- in cmd2
