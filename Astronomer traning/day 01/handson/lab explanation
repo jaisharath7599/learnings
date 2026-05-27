@@ -17,6 +17,7 @@ Install Python & Dependencies
 
         Setting up Airflow as a Docker Container
 
+
 1. Update Ubuntu Packages
 >>sudo apt update
 Refreshes the package repository list.
@@ -50,8 +51,7 @@ Example output:
 Docker version 26.x.x
 
 7. Install Docker Compose
-Your command has a formatting issue.
-Use this corrected command:
+
 >>sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
 Make it executable:
@@ -122,3 +122,14 @@ airflow	airflow
 >>nano ecommerce_order_pipeline.py -->ctrl+s and ctrl+X
 after this we can see ecommerce_order_pipeline dag in UI
 
+------------------------------------------------------------
+
+Docker Container-
+A Docker Container is a lightweight, portable package that contains:
+        Application code
+        Required libraries
+        Dependencies
+        Runtime
+        Configuration
+  Everything needed to run an application consistently anywhere.
+  Think of a container like a mini isolated computer for your application.

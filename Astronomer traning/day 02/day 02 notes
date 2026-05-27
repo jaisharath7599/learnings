@@ -1,0 +1,530 @@
+#           CHAPTER 1 — Scheduler Architecture
+
+scheduler is a heartbeat of the airflow
+because without schedule dags exist tasks exist but nothing runs
+Scheduler is a continuously running background process.
+Its responsibilities:
+  1. Read DAGs
+  2. Check schedules
+  3. Create DAG runs
+  4. Check dependencies
+  5. Queue tasks
+  6. Send tasks to executor
+
+# What is Pool?
+  Pools limit concurrency.
+  eg - Database team says:
+          “Only 5 jobs can hit production Oracle DB simultaneously.”
+          You create pool:
+>>          oracle_pool = 5 slots
+            Now even if 100 tasks are ready:
+            Only 5 run simultaneously.
+
+  Why Pools Matter
+    Without pools:
+      Database overload
+      API throttling
+      Cluster crashes
+      Resource starvation
+
+# What is Priority Weights?
+Suppose:
+Finance pipeline
+Marketing pipeline
+Both compete for slots.
+Finance jobs are critical.
+  Set:
+  >>priority_weight=100
+  Marketing:
+  >>priority_weight=10
+Scheduler prioritizes finance tasks first.
+
+# High Availability (HA) Scheduler
+Older Airflow:
+  Single scheduler
+  If scheduler dies → entire orchestration stops
+Modern Airflow:
+  Multiple schedulers supported
+
+How HA Works
+  Multiple schedulers:
+    Read same metadata DB
+    Use serialized DAGs
+    Avoid duplicate scheduling
+  Database acts as:
+    Single source of truth
+
+#             Chapter 2 — Bringing Workflows to Life
+#                   DAG Parsing Mechanism
+Understanding how Airflow reads and interprets dag files is key to writing reliable pipelines.
+
+What is DAG Parsing?
+  Airflow continuously scans DAG folder.
+Example:
+>> /opt/airflow/dags
+Every Python file:
+  Imported
+  Executed
+  DAG objects extracted
+
+* Important Concept
+  Airflow IMPORTS your DAG file, It does NOT simply read text.
+  Meaning:
+  ALL top-level code executes during parsing [Parsing = Read + Understand + Interpret]. --> means there is no Lazy Evaluation like spark.. 
+
+  Dangerous Real-Time Example
+  BAD:
+>>  df = spark.read.parquet("huge_file")
+  at module level.
+
+  Why dangerous?
+  Scheduler imports DAG file repeatedly.
+  Now every parse:
+    Spark session starts
+    Huge file reads
+    Scheduler slows
+  Entire Airflow becomes unstable
+
+  Correct Approach
+    Do heavy work INSIDE tasks.
+  GOOD:
+>>  def read_data():
+>>      df = spark.read.parquet(...)
+
+# DagFileProcessor
+Its job:
+  Import Python file
+  Find DAG objects
+  Serialize DAG
+  Store in metadata DB
+
+  Why Serialization?
+    Scheduler should not repeatedly parse huge DAGs.
+
+# DAG vs Task
+DAG
+  Defines:
+    Workflow structure
+    Dependencies
+    Schedule
+Tasks
+  Define actual work
+    Python function
+    SQL query
+    Bash command
+
+# Periodic Re-parsing
+  for every 30 seconds, New DAG detected automatically, Updated schedule reflected, Deleted DAG removed -- No restart needed.
+
+# Parse Performance
+  Very important production topic.
+  BAD DAG files:
+    Heavy imports
+    API calls
+    DB connections
+    Large loops 
+  Impact:
+    Scheduler lag
+    Delayed tasks
+    CPU spikes
+
+  Production Best Practices
+  Avoid:
+    pandas.read_csv()
+    requests.get()
+    spark.read()
+  during DAG parsing.
+
+#           CHAPTER 3 — Task Lifecycle & States
+
+> Scheduled → Queued → Running → Success
+
+1. Scheduled - Task eligible to run.
+    Conditions met:
+      Upstream success
+      Time reached
+      Dependencies resolved
+    But not yet assigned to worker.
+  
+2. Queued - Task sent to executor queue.
+    Waiting for:
+      Worker
+      Pod
+      Slot
+      Resource
+
+    Real Example
+      100 tasks queued.
+      Only 10 worker slots available.
+      90 remain queued.
+
+3. Running - Worker picked task.
+
+4. Success - Task completed successfully.
+    Scheduler now checks downstream tasks.
+
+# Task Failure
+  Retry Mechanism
+  Example:
+    retries=3
+  Airflow retries automatically.
+
+#   Understanding Task States
+1. Queued - Task is eligible and waiting to be picked up by an executor worker.
+2. Success - Task completed without errors; downstream tasks may now be scheduled.
+3. Upstream Failed - A required upstream task failed, blocking this task from running.
+        Blocked because dependency failed.
+        Example:
+          A → B
+        A failed.
+        B becomes: - upstream_failed
+4. Deferred - Task is suspended and waiting for an external event via a Trigger
+      Modern Airflow feature.
+      traditional sensors:
+        Occupy worker continuously
+      Deferred tasks:
+        Sleep efficiently
+        Free worker resources
+
+      Real-Time Sensor Example
+        Wait for S3 file.
+      OLD approach:
+        Worker occupied for 5 hours
+      Deferred:
+        Worker released
+        Trigger waits asynchronously
+      Huge scalability improvement.
+5. Running - Task is actively executing on a worker process or pod.
+6. Failed - Task encountered an unhandled exception or non-zero exit code.
+7. Skipped - Task was bypassed due to branching logic or skip_on_failure settings.
+8. Upstream Skipped - All upstream tasks were skipped, propagating the skip state downstream.
+
+#             chapter 4 — How Tasks Get Done
+#                 Executor Models
+Executors are the pluggable backends responsible for physically running task instances. Choosing the right executor is one of the most impactful architectural decisions in any Airflow deployment.
+
+What Is an Executor?
+An executor is the component that takes a queued TaskInstance and physically runs it — either locally or on a remote system. 
+Executors are configured once per Airflow environment via the executor key in the [core] section of airflow.cfg.
+
+Important Internal Concept
+  Executor logic runs INSIDE scheduler process.
+  Workers run externally.
+
+# Local Executors
+    Local executors run tasks on the same machine as the scheduler. 
+    They are simple to configure and ideal for development, testing, or small-scale
+    single-machine deployments — but they cannot scale horizontally across multiple nodes.
+
+  1. SequentialExecutor
+      Executes one task at a time in strict sequence within a single process.
+      Uses SQLite as the default database. Zero setup required — perfect for
+      local development and testing, but never suitable for production due to
+      complete lack of parallelism.
+  2. LocalExecutor
+      Runs multiple subprocesses locally.
+      Good for:
+        Small teams
+        Single VM deployment
+      Example
+        8 CPU cores.
+        Airflow can run:
+        8 parallel tasks
+        on same machine.
+      Limitation
+        Cannot scale across machines.
+        If server crashes: Everything stops.
+    [Spawns a separate subprocess for each task, enabling true parallelism on a single machine. Supports configurable parallelism limits.]
+  
+# Remote Executors
+  Remote executors distribute task execution across **external infrastructure**, enabling horizontal scaling, fault isolation, and production-grade reliability.
+
+  1. CeleryExecutor
+      Pushes tasks to a message broker (Redis or RabbitMQ).
+      Remote Celery workers pull tasks from the queue and execute them independently.
+      Advantages
+        build of Horizontal scaling
+        fault tolerance
+        production readiness
+        
+      Challenges
+        takes time to setup
+        not cost effective
+        Need:
+          Redis/RabbitMQ
+          Result backend
+          Worker management
+        Operationally more complex.
+
+  2. KubernetesExecutor
+      Launches each task as an isolated Kubernetes Pod.
+      One of the most modern architectures.
+      Each task launches:
+        Separate Kubernetes Pod
+
+      Real-Time Example
+      Task 1:
+        2 CPU, 4GB RAM
+      Task 2:
+        16 CPU, 64GB RAM
+      Each gets isolated pod.
+
+      Benefits
+        Perfect isolation
+        Auto-scaling
+        Cloud-native
+        No long-running workers
+      Drawbacks
+        Kubernetes expertise required
+        More infrastructure complexity
+
+  3. DaskExecutor
+      Used in data science ecosystems.
+      Good when:
+        Existing Dask cluster exists
+        Heavy numerical workloads
+      Less common in enterprise ETL.
+
+Which Executor to Choose?
+  Use Case	          Best Executor
+  Learning	          SequentialExecutor
+  Small Production	  LocalExecutor
+  Enterprise ETL	    CeleryExecutor
+  Cloud Native	      KubernetesExecutor
+  Data Science	      DaskExecutor
+
+#             chapter 4 — The Brains of the Operation
+#                 Metadata Database Schema
+
+This is the MOST critical backend component.
+
+Why Metadata DB Matters
+  Everything goes into DB:
+    DAG runs
+    Task states
+    Logs
+    Scheduler heartbeats
+    Retry counts
+    SLA misses
+  Without DB:
+    Airflow cannot function.
+
+Airflow supports PostgreSQL and MySQL for production use. SQLite only for local development.
+
+# Core Tables
+1. dag Table
+    Stores:
+      DAG metadata
+      Schedule
+      Owner
+      Tags
+      Active status
+
+2. dag_run Table
+  One row = one DAG execution.
+    Example:
+      dag_id	execution_date	state
+      sales_pipeline	2026-05-18	success
+
+3. task_instance Table
+  MOST IMPORTANT table.
+  Tracks:
+    Task state
+    Start time
+    End time
+    Retry count
+    Duration
+    Log URL
+
+  Real-Time Debugging Example
+  Task stuck?
+  Query:
+    SELECT *
+    FROM task_instance
+    WHERE dag_id='sales_pipeline'
+  You can debug directly from DB.
+
+4. job Table
+  Tracks:
+    Scheduler heartbeat
+    Worker heartbeat
+    Triggerer heartbeat
+
+  Used for:
+    Health checks
+    HA monitoring
+
+5. SLA Miss Table
+  Tracks delayed tasks.
+  Example:
+    Task must finish within 30 min.
+  If exceeds:
+    SLA miss recorded
+    Alert triggered
+
+#             chapter 4 — The Control Panel
+#                 Airflow Configuration Structure
+
+Airflow is configured via the airflow.cfg file, which is organized into named sections. Every setting can be overridden using environment variables following the pattern AIRFLOW__SECTION__KEY — making it ideal for containerized and secrets-managed deployments.
+
+Core Sections
+
+1. [core]
+  Controls:
+    Executor type
+    Parallelism
+    DAG folder
+    Timezone
+    Logging
+
+    Example
+      [core]
+      executor = CeleryExecutor
+      parallelism = 128
+
+2. [database]
+    Contains:
+      DB connection
+      Pool size
+      SQLAlchemy configs
+
+    Example
+      sql_alchemy_conn = postgresql://...
+
+3. [scheduler]
+    Controls:
+      Scheduling interval
+      Parsing threads
+      Heartbeat timing
+    Example
+      [scheduler]
+      max_threads = 8
+
+4. [webserver]
+
+  Controls UI:
+    Port
+    Authentication
+    Session timeout
+    Secret key
+
+# Environment Variables
+  AIRFLOW__SECTION__KEY
+
+  Example
+  AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+
+  Why Environment Variables?
+  Production benefits:
+    Secure
+    Kubernetes-friendly
+    Docker-friendly
+    CI/CD friendly
+    No plaintext secrets
+
+--------------------------------------------------------------
+
+# Complete End-to-End Internal Flow
+
+Now let’s combine EVERYTHING.
+Real-Time Pipeline Example
+Daily retail ETL:
+Extract → Transform → Load → Dashboard Refresh
+
+Step 1 — DAG Parsing
+Scheduler scans DAG folder.
+DagFileProcessor:
+  Imports DAG file
+  Extracts DAG
+  Serializes DAG
+
+Step 2 — DAG Run Creation
+  At scheduled time:
+  Scheduler creates DagRun.
+
+Step 3 — Dependency Evaluation
+  Checks:
+  Upstream success?
+  Pool slot available?
+  Concurrency limits?
+
+Step 4 — Queue Task
+  Task enters executor queue.
+  State:
+  queued
+
+Step 5 — Executor Dispatch
+  Executor sends task:
+  Celery worker
+  OR
+  Kubernetes pod
+  OR
+  Local process
+
+Step 6 — Task Execution
+  Worker:
+  Runs Python
+  Executes Spark
+  Calls APIs
+  Runs SQL
+  State:
+  running
+
+Step 7 — Result Update
+Worker updates metadata DB.
+State:
+success / failed
+
+Step 8 — Scheduler Continues
+Scheduler checks downstream tasks.
+Pipeline continues.
+
+# Most Important Production Learnings
+1. Scheduler is Everything
+If scheduler unhealthy:
+Nothing runs.
+
+Always monitor:
+  Scheduler heartbeat
+  Parse time
+  Queue delay
+
+2. DAG Parsing Must Be Lightweight
+
+Avoid:
+  Spark sessions
+  API calls
+  Heavy imports
+during parsing.
+
+3. Executor Choice Changes Architecture
+LocalExecutor → simple
+CeleryExecutor → distributed
+KubernetesExecutor → cloud-native
+
+4. Metadata DB is Critical
+Use:
+  PostgreSQL
+  Backups
+  Proper indexing
+  Connection pooling
+
+5. Understand Task States
+  Helps debug:
+  Why tasks stuck
+  Why tasks skipped
+  Why downstream not running
+
+----------------------------------------------------------------------
+
+# Simple Analogy of Entire Airflow
+
+Airflow Component	    Real-World Analogy
+Scheduler	            Project Manager
+DAG	                  Project Plan
+Task	                Individual Job
+Executor	            Delivery Team
+Worker	              Employee
+Metadata DB	          Central Tracking System
+Pool	Resource        Capacity
+Trigger	Notification  System
